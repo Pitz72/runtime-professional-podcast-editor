@@ -1,14 +1,17 @@
 import React from 'react';
 import { Project, Track, AudioClip, TrackKind, AudioPreset } from '../types';
 import { VOICE_PRESETS, MUSIC_PRESETS } from '../presets';
+import { TrashIcon, SplitIcon } from './icons';
 
 interface PropertiesPanelProps {
   selectedItem: { type: 'track' | 'clip', id: string } | null;
   project: Project;
   setProject: React.Dispatch<React.SetStateAction<Project | null>>;
+  setSelectedItem: (item: { type: 'track' | 'clip', id: string } | null) => void;
+  currentTime: number;
 }
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project, setProject }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project, setProject, setSelectedItem, currentTime }) => {
 
   const handlePresetChange = (trackId: string, presetName: string, availablePresets: AudioPreset[]) => {
     const preset = availablePresets.find(p => p.name === presetName);
@@ -90,20 +93,90 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
   const renderClipProperties = (clipId: string) => {
     let clip: AudioClip | undefined;
     let file: import('../types').AudioFile | undefined;
+    let trackId: string | undefined;
     
     for (const track of project.tracks) {
         clip = track.clips.find(c => c.id === clipId);
         if (clip) {
             file = project.files.find(f => f.id === clip.fileId);
+            trackId = track.id;
             break;
         }
     }
      
-    if (!clip || !file) return <p className="text-gray-500">Clip not found.</p>;
+    if (!clip || !file || !trackId) return <p className="text-gray-500">Clip not found.</p>;
+
+    const handleDeleteClip = () => {
+        setProject(p => {
+            if (!p) return null;
+            const newTracks = p.tracks.map(t => {
+                if (t.id === trackId) {
+                    return { ...t, clips: t.clips.filter(c => c.id !== clipId) };
+                }
+                return t;
+            });
+            return { ...p, tracks: newTracks };
+        });
+        setSelectedItem(null);
+    };
+
+    const handleSplitClip = () => {
+        if (!clip) return;
+        const splitPoint = currentTime - clip.startTime;
+        if (splitPoint <= 0 || splitPoint >= clip.duration) {
+            alert("The playhead must be within the clip to split it.");
+            return;
+        }
+
+        const originalClip = clip;
+        const newClip: AudioClip = {
+            id: `clip-${Date.now()}`,
+            fileId: originalClip.fileId,
+            trackId: originalClip.trackId,
+            startTime: currentTime,
+            duration: originalClip.duration - splitPoint,
+            offset: originalClip.offset + splitPoint,
+        };
+
+        setProject(p => {
+            if (!p) return null;
+            const newTracks = p.tracks.map(t => {
+                if (t.id === trackId) {
+                    const clipIndex = t.clips.findIndex(c => c.id === clipId);
+                    const updatedClips = [
+                        ...t.clips.slice(0, clipIndex),
+                        { ...originalClip, duration: splitPoint },
+                        newClip,
+                        ...t.clips.slice(clipIndex + 1)
+                    ];
+                    return { ...t, clips: updatedClips };
+                }
+                return t;
+            });
+            return { ...p, tracks: newTracks };
+        });
+    };
+
+    const canSplit = currentTime > clip.startTime && currentTime < (clip.startTime + clip.duration);
 
     return (
         <>
-            <h3 className="text-lg font-bold mb-2 truncate">{file.name}</h3>
+            <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold mb-2 truncate pr-2">{file.name}</h3>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleSplitClip}
+                        disabled={!canSplit}
+                        title={canSplit ? "Split clip at playhead" : "Playhead must be inside the clip to split"}
+                        className="p-1 text-gray-400 hover:text-purple-500 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <SplitIcon className="w-5 h-5" />
+                    </button>
+                    <button onClick={handleDeleteClip} className="p-1 text-gray-400 hover:text-red-500 hover:bg-gray-700 rounded-md">
+                        <TrashIcon className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
             <p className="text-sm text-gray-400 mb-4">Clip Properties</p>
             <div className="space-y-2 text-sm">
                 <p><span className="font-semibold text-gray-300">Start Time:</span> {clip.startTime.toFixed(2)}s</p>

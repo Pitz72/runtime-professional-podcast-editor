@@ -21,6 +21,7 @@ export interface AudioClip {
   startTime: number; // in seconds
   duration: number; // in seconds
   offset: number; // start point within the original audio file
+  normalizationGain?: number; // Gain in dB to be applied for loudness normalization
 }
 
 export interface CompressorSettings {

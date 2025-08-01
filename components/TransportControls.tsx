@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlayIcon, PauseIcon, StopIcon, SaveIcon } from './icons';
+import { PlayIcon, PauseIcon, StopIcon, SaveIcon, UndoIcon, RedoIcon } from './icons';
 import { CompressorSettings } from '../types';
 import { MASTERING_PRESETS } from '../presets';
 
@@ -13,6 +13,10 @@ interface TransportControlsProps {
   isBuffering: boolean;
   isExporting: boolean;
   currentMastering?: CompressorSettings;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const TransportControls: React.FC<TransportControlsProps> = ({ 
@@ -24,7 +28,11 @@ const TransportControls: React.FC<TransportControlsProps> = ({
   onMasteringChange,
   isBuffering, 
   isExporting,
-  currentMastering
+  currentMastering,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo
 }) => {
   const isBusy = isBuffering || isExporting;
   const exportButtonText = isExporting ? 'Exporting...' : 'Export';
@@ -46,6 +54,23 @@ const TransportControls: React.FC<TransportControlsProps> = ({
   return (
     <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 bg-gray-900 p-1 rounded-lg">
+             <button
+                onClick={onUndo}
+                className="p-2 text-gray-300 hover:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!canUndo || isBusy}
+                title="Undo (Ctrl+Z)"
+            >
+                <UndoIcon className="w-5 h-5" />
+            </button>
+             <button
+                onClick={onRedo}
+                className="p-2 text-gray-300 hover:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!canRedo || isBusy}
+                title="Redo (Ctrl+Y)"
+            >
+                <RedoIcon className="w-5 h-5" />
+            </button>
+            <div className="w-px h-6 bg-gray-700 mx-2"></div>
             <button 
                 onClick={onStop} 
                 className="p-2 text-gray-300 hover:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"

@@ -72,6 +72,14 @@ export const MUSIC_PRESETS: AudioPreset[] = [
             { type: 'lowpass', frequency: 10000, Q: 1 },
             { type: 'highshelf', frequency: 5000, gain: -4 }, // Reduce high frequencies
         ]
+    },
+    {
+        name: 'Podcast Music Bed',
+        equalizer: [
+            { type: 'highpass', frequency: 100, Q: 1.5 },
+            { type: 'peaking', frequency: 3000, Q: 2, gain: -6 }, // Wide scoop for vocals
+            { type: 'lowpass', frequency: 12000, Q: 1 },
+        ]
     }
 ];
 

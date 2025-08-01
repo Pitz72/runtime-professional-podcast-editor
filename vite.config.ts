@@ -11,6 +11,15 @@ export default defineConfig({
       {
         // Main-Process entry file of the Electron App.
         entry: 'electron/main.ts',
+        vite: {
+          build: {
+            lib: {
+              entry: 'electron/main.ts',
+              formats: ['cjs'],
+            },
+            outDir: 'dist-electron',
+          },
+        },
       },
       {
         entry: 'electron/preload.ts',

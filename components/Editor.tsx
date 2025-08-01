@@ -173,14 +173,10 @@ function encodeWAV(audioBuffer: AudioBuffer): Blob {
 
 interface EditorProps {
     project: Project;
-    setProject: (update: Project | ((current: Project) => Project)) => void;
-    undo: () => void;
-    redo: () => void;
-    canUndo: boolean;
-    canRedo: boolean;
+    setProject: React.Dispatch<React.SetStateAction<Project | null>>;
 }
 
-const Editor: React.FC<EditorProps> = ({ project, setProject, undo, redo, canUndo, canRedo }) => {
+const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
     const [selectedItem, setSelectedItem] = useState<{ type: 'track' | 'clip', id: string } | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -448,31 +444,10 @@ a.click();
     }, [project]);
     
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-                return;
-            }
-            const isMod = e.ctrlKey || e.metaKey;
-            if (isMod && e.key.toLowerCase() === 'z') {
-                e.preventDefault();
-                if (e.shiftKey) {
-                    redo();
-                } else {
-                    undo();
-                }
-            }
-            if (isMod && e.key.toLowerCase() === 'y') {
-                e.preventDefault();
-                redo();
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
         return () => {
-            window.removeEventListener('keydown', handleKeyDown);
             stopPlayback();
         };
-    }, [undo, redo, stopPlayback]);
+    }, [stopPlayback]);
 
     return (
         <div className="flex flex-col h-screen bg-gray-900 overflow-hidden">
@@ -488,22 +463,12 @@ a.click();
                     isBuffering={isBuffering}
                     isExporting={isExporting}
                     currentMastering={project.mastering}
-                    onUndo={undo}
-                    onRedo={redo}
-                    canUndo={canUndo}
-                    canRedo={canRedo}
                 />
             </header>
             <div className="flex flex-1 overflow-hidden">
                 <aside className="w-1/4 max-w-xs flex flex-col bg-gray-800 border-r border-gray-700">
                     <FileBin files={project.files} onFileDrop={handleFileDrop} />
-                    <PropertiesPanel
-                        selectedItem={selectedItem}
-                        project={project}
-                        setProject={setProject}
-                        setSelectedItem={setSelectedItem}
-                        currentTime={currentTime}
-                    />
+                    <PropertiesPanel selectedItem={selectedItem} project={project} setProject={setProject} />
                 </aside>
                 <main className="flex-1 flex flex-col overflow-y-auto">
                     <Timeline 
@@ -512,7 +477,6 @@ a.click();
                         onSelectItem={setSelectedItem} 
                         onAddTrack={addTrack}
                         currentTime={currentTime}
-                        selectedItem={selectedItem}
                     />
                 </main>
             </div>

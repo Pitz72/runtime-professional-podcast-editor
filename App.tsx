@@ -1,19 +1,11 @@
-import React, { useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import WelcomeScreen from './components/WelcomeScreen';
 import Editor from './components/Editor';
-import { Project } from './types';
+import { Project, Track, TrackKind } from './types';
 import { INITIAL_TRACKS } from './constants';
-import { useHistoryState } from './hooks/useHistoryState';
 
 const App: React.FC = () => {
-  const {
-    state: project,
-    setState: setProject,
-    undo,
-    redo,
-    canUndo,
-    canRedo
-  } = useHistoryState<Project | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
 
   const createNewProject = useCallback(() => {
     setProject({
@@ -21,7 +13,7 @@ const App: React.FC = () => {
       tracks: INITIAL_TRACKS,
       files: [],
     });
-  }, [setProject]);
+  }, []);
   
   const loadProject = useCallback(() => {
     const input = document.createElement('input');
@@ -49,20 +41,13 @@ const App: React.FC = () => {
       }
     };
     input.click();
-  }, [setProject]);
+  }, []);
 
 
   return (
     <div className="h-screen w-screen bg-gray-900 text-gray-200 flex flex-col overflow-hidden">
       {project ? (
-        <Editor
-          project={project}
-          setProject={setProject}
-          undo={undo}
-          redo={redo}
-          canUndo={canUndo}
-          canRedo={canRedo}
-        />
+        <Editor project={project} setProject={setProject} />
       ) : (
         <WelcomeScreen onNewProject={createNewProject} onLoadProject={loadProject} />
       )}

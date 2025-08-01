@@ -69,7 +69,7 @@ La prima versione del software si concentrerà sull'implementazione pulita delle
 
 5.  **Motore Audio e Processamento:**
     *   Utilizzo della **Web Audio API** per tutta l'elaborazione audio in tempo reale.
-    *   **Preset Professionali:** Una selezione di preset di alta qualità per:
+    *   **Preset Professionali:** Una selezione di alta qualità per:
         *   **Voce:** (es. "Podcast Clarity", "Warm Voice").
         *   **Musica:** (es. "Music Bed" con scoop sulle medie frequenze).
         *   **Mastering:** Preset per portare il volume finale a standard di settore (es. "Spotify Loud", "Apple Podcasts Natural").

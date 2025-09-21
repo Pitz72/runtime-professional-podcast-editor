@@ -1,0 +1,6 @@
+{
+  "name": "Runtime Radio - Podcast Creation Kit",
+  "description": "An audio editing application designed to build podcasts. It allows you to compose your show from music, background ambience, voice tracks, and sound effects, with AI-powered features to achieve a professional sound with ease.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

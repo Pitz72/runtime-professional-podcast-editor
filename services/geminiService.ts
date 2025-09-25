@@ -1,8 +1,8 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { AudioPreset } from '../types';
+import { AudioPreset } from "../types";
 import { AI_PRESET_NAME } from "../constants";
 
-const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * Generates an audio enhancement preset using the Gemini API with retry logic and fallback.
@@ -46,14 +46,16 @@ export async function getAudioEnhancementPreset(
     try {
       console.log(`AI Enhancement attempt ${attempt}/${maxRetries}`);
 
-      const response: GenerateContentResponse = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-04-17",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-        },
-      });
+      const response: GenerateContentResponse = await ai.models.generateContent(
+        {
+          model: "gemini-1.5-flash",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            temperature: 0.2,
+          },
+        }
+      );
 
       const jsonStr = response.text.trim();
       // Although we request JSON, the model might still wrap it in markdown.
@@ -64,13 +66,19 @@ export async function getAudioEnhancementPreset(
       const parsedData = JSON.parse(finalJsonStr) as AudioPreset;
 
       // Basic validation
-      if (parsedData.name && parsedData.compressor && Array.isArray(parsedData.equalizer)) {
-        console.log('AI Enhancement successful');
+      if (
+        parsedData.name &&
+        parsedData.compressor &&
+        Array.isArray(parsedData.equalizer)
+      ) {
+        console.log("AI Enhancement successful");
         return parsedData;
       }
 
-      console.warn("Parsed JSON does not match expected AudioPreset structure:", parsedData);
-
+      console.warn(
+        "Parsed JSON does not match expected AudioPreset structure:",
+        parsedData
+      );
     } catch (error) {
       console.error(`AI Enhancement attempt ${attempt} failed:`, error);
 
@@ -81,11 +89,13 @@ export async function getAudioEnhancementPreset(
 
       // Wait before retrying (exponential backoff)
       const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
-  console.warn('AI Enhancement failed after all retries, falling back to default preset');
+  console.warn(
+    "AI Enhancement failed after all retries, falling back to default preset"
+  );
   return getFallbackPreset(description);
 }
 
@@ -94,8 +104,12 @@ export async function getAudioEnhancementPreset(
  */
 function getFallbackPreset(description: string): AudioPreset {
   // Analyze description for basic pattern matching
-  const isVoice = description.toLowerCase().includes('voice') || description.toLowerCase().includes('podcast');
-  const hasNoise = description.toLowerCase().includes('noise') || description.toLowerCase().includes('background');
+  const isVoice =
+    description.toLowerCase().includes("voice") ||
+    description.toLowerCase().includes("podcast");
+  const hasNoise =
+    description.toLowerCase().includes("noise") ||
+    description.toLowerCase().includes("background");
 
   if (isVoice) {
     return {
@@ -108,9 +122,9 @@ function getFallbackPreset(description: string): AudioPreset {
         release: 0.25,
       },
       equalizer: [
-        { type: 'highpass', frequency: 80, Q: 1 },
-        { type: 'peaking', frequency: 3500, Q: 1.5, gain: 2.5 },
-        { type: 'highshelf', frequency: 10000, gain: 1.5 },
+        { type: "highpass", frequency: 80, Q: 1 },
+        { type: "peaking", frequency: 3500, Q: 1.5, gain: 2.5 },
+        { type: "highshelf", frequency: 10000, gain: 1.5 },
       ],
     };
   }
@@ -126,8 +140,8 @@ function getFallbackPreset(description: string): AudioPreset {
       release: 0.3,
     },
     equalizer: [
-      { type: 'highpass', frequency: 50, Q: 1 },
-      { type: 'peaking', frequency: 1000, Q: 1, gain: 1 },
+      { type: "highpass", frequency: 50, Q: 1 },
+      { type: "peaking", frequency: 1000, Q: 1, gain: 1 },
     ],
   };
 }

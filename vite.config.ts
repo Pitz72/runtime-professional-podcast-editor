@@ -1,35 +1,41 @@
-import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'path';
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
-    return {
-      plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+  const env = loadEnv(mode, '.', '');
+  return {
+    plugins: [react()],
+    root: 'src/renderer',
+    base: './', // Important for Electron
+    define: {
+      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src/renderer'),
+        '@shared': path.resolve(__dirname, './src/shared'),
       },
-      resolve: {
-        alias: {
-          '@': path.resolve(__dirname, '.'),
+    },
+    build: {
+      outDir: '../../dist',
+      emptyOutDir: true,
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'src/renderer/index.html'),
+        },
+        manualChunks: {
+          'audio-analysis': ['src/renderer/hooks/useAudioAnalysis.ts'],
+          'ai-services': ['src/renderer/services/geminiService.ts'],
+          'audio-processing': ['src/renderer/services/audioUtils.ts', 'src/renderer/workers/audioProcessor.worker.ts'],
+          'ui-components': ['src/renderer/components/WaveformDisplay.tsx', 'src/renderer/components/PropertiesPanel.tsx']
         }
       },
-      build: {
-        rollupOptions: {
-          output: {
-            manualChunks: {
-              // Separate chunk for audio analysis (heavy computation)
-              'audio-analysis': ['hooks/useAudioAnalysis.ts'],
-              // Separate chunk for AI services
-              'ai-services': ['services/geminiService.ts'],
-              // Separate chunk for advanced audio processing
-              'audio-processing': ['services/audioUtils.ts', 'workers/audioProcessor.worker.ts'],
-              // Separate chunk for UI components
-              'ui-components': ['components/WaveformDisplay.tsx', 'components/PropertiesPanel.tsx'],
-            }
-          }
-        }
-      }
-    };
+    },
+    server: {
+      port: 5173,
+      strictPort: true,
+    }
+  };
 });

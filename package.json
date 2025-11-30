@@ -1,14 +1,14 @@
 {
   "name": "runtime-radio-podcast-toolkit",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.2.0",
+  "main": "dist/main/main.js",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json -w\" \"wait-on tcp:5173 && wait-on dist/main/main.js && electron .\"",
+    "build": "tsc -p tsconfig.electron.json && vite build && electron-builder",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
     "test:run": "vitest run"
   },
   "dependencies": {
@@ -16,16 +16,25 @@
     "lamejs": "^1.2.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "web-vitals": "^5.1.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^22.14.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.4",
+    "electron-builder": "^26.0.12",
+    "electron-is-dev": "^3.0.1",
     "jsdom": "^27.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wait-on": "^9.0.3"
   }
 }

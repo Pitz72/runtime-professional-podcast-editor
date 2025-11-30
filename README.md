@@ -4,7 +4,7 @@
 
 # 🎙️ Runtime Radio Podcast Toolkit
 
-**Version 1.0.0 "The Sonic Generational Evolution"**
+**Version 0.2.0 "Streaming Foundation"**
 
 A revolutionary Digital Audio Workstation designed specifically for podcast production. Create broadcast-quality podcasts with AI-powered audio enhancement, real-time waveform visualization, multi-track recording, professional mastering suite, and enterprise-grade performance optimizations.
 
@@ -60,9 +60,9 @@ A revolutionary Digital Audio Workstation designed specifically for podcast prod
 
 ## 📖 Documentation
 
-- **[User Guide](USER_GUIDE.md)**: Complete feature documentation and tutorials
-- **[Changelog](CHANGELOG.md)**: Version history and feature updates
-- **[Regression Testing](REGRESSION_TESTING.md)**: Quality assurance procedures
+- **[User Guide](docs/USER_GUIDE.md)**: Complete feature documentation and tutorials
+- **[Changelog](docs/CHANGELOG.md)**: Version history and feature updates
+- **[Regression Testing](docs/REGRESSION_TESTING.md)**: Quality assurance procedures
 
 ## 🎯 Use Cases
 
@@ -166,7 +166,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
-- **Documentation**: [User Guide](USER_GUIDE.md)
+- **Documentation**: [User Guide](docs/USER_GUIDE.md)
 
 ---
 

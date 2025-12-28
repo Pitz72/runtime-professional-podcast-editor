@@ -12,6 +12,7 @@ import { useClipClipboard } from '../hooks/useClipClipboard';
 import { useKeyboardShortcuts, KeyboardShortcut } from '../hooks/useKeyboardShortcuts';
 import { usePreloadResources } from '../hooks/usePreloadResources';
 import { validateAudioFile } from '../services/audioUtils';
+import { audioCache } from '../services/AudioCache';
 
 
 interface EditorProps {
@@ -87,8 +88,14 @@ const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
                         const audioContext = new AudioContext();
                         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
                         audioContext.close();
+
+                        const fileId = `file-${Date.now()}-${Math.random()}`;
+
+                        // Add to cache immediately
+                        audioCache.set(fileId, audioBuffer);
+
                         resolve({
-                            id: `file-${Date.now()}-${Math.random()}`,
+                            id: fileId,
                             name: file.name,
                             url: dataUrl, // Save the Data URL
                             type: file.type,

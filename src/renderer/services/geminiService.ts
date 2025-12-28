@@ -2,7 +2,9 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AudioPreset } from '@shared/types';
 import { AI_PRESET_NAME } from "../constants";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Use import.meta.env for Vite or fallback to process.env if polyfilled
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY;
+const ai = new GoogleGenAI({ apiKey: apiKey });
 
 /**
  * Generates an audio enhancement preset using the Gemini API with retry logic and fallback.

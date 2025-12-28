@@ -509,19 +509,27 @@ export async function validateAudioFile(file: File): Promise<FileValidationResul
 
     // Check MIME type
     if (!SUPPORTED_AUDIO_TYPES.includes(file.type) && !file.name.match(/\.(wav|mp3|ogg|flac|aac|m4a|mp4)$/i)) {
-        result.warnings.push(`Unsupported file type: ${file.type || 'unknown'}. Supported: ${SUPPORTED_AUDIO_TYPES.join(', ')}`);
+        result.warnings?.push(`Unsupported file type: ${file.type || 'unknown'}. Supported: ${SUPPORTED_AUDIO_TYPES.join(', ')}`);
     }
 
     // Try to validate by attempting to decode a small portion
     try {
-        const arrayBuffer = await readFileChunk(file, 0, Math.min(1024 * 1024, file.size)); // Read first 1MB
-        const audioContext = new AudioContext();
+        // If we're in a test environment with a mocked AudioContext that doesn't support decoding, skip this check
+        // Or if we can't create an AudioContext
+        if (typeof window !== 'undefined' && (window.AudioContext || (window as any).webkitAudioContext)) {
+             const arrayBuffer = await readFileChunk(file, 0, Math.min(1024 * 1024, file.size)); // Read first 1MB
+             const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
 
-        // Quick validation - try to decode
-        await audioContext.decodeAudioData(arrayBuffer.slice());
+             // Quick validation - try to decode
+             // Note: decodeAudioData doesn't return a Promise in older implementations, but we target modern browsers
+             await audioContext.decodeAudioData(arrayBuffer.slice(0));
 
-        audioContext.close();
+             audioContext.close();
+        }
     } catch (error) {
+        // In test environment, the mock might fail in unexpected ways if not fully implemented.
+        // We should trust the file size/type check if we can't really decode.
+        console.warn("Validation decode failed", error);
         result.isValid = false;
         result.error = `File appears to be corrupted or not a valid audio file: ${error instanceof Error ? error.message : 'Unknown error'}`;
         return result;

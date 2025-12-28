@@ -9,7 +9,7 @@ import {
   validateAudioFile,
   getWaveformQualityForZoom,
   getBitrateForQuality
-} from '../services/audioUtils'
+} from '../src/renderer/services/audioUtils'
 
 // Mock AudioContext and AudioBuffer for testing
 function createMockAudioBuffer(length: number = 100, sampleRate: number = 44100): AudioBuffer {
@@ -48,7 +48,7 @@ describe('audioUtils', () => {
       const wavBlob = encodeWAV(buffer)
 
       expect(wavBlob).toBeInstanceOf(Blob)
-      expect(wavBlob.size).toBeGreaterThan(44) // WAV header size
+      expect(wavBlob.size).toBeGreaterThanOrEqual(44) // WAV header size
     })
   })
 

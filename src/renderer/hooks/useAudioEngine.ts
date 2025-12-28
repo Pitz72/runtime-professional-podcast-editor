@@ -2,6 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Project, Track, TrackKind, AudioFile, AudioClip } from '@shared/types';
 import { buildAudioGraph, encodeWAV, exportAudioBuffer, ExportOptions } from '../services/audioUtils';
 import { MASTERING_PRESETS } from '../presets';
+import { audioCache } from '../services/AudioCache';
+import { useAudioContext } from '../services/AudioContextPool';
 
 export interface AudioEngineState {
   isPlaying: boolean;
@@ -31,36 +33,54 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
   const playbackStartTimeRef = useRef(0);
   const seekOffsetRef = useRef(0);
 
-  const initAudioContext = useCallback(() => {
+  const { getContext, returnContext } = useAudioContext();
+
+  const initAudioContext = useCallback(async () => {
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = await getContext();
     }
     if (audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume();
     }
-  }, []);
+  }, [getContext]);
 
   const hydrateBuffers = useCallback(async (files: AudioFile[]) => {
-    if (!files.some(f => !f.buffer)) return;
+    // Check if we need hydration (if buffer is missing but we have url)
+    // OR if we have the buffer in cache but not in the file object
+    const filesToHydrate = files.filter(f => (!f.buffer && f.url) || (f.url && audioCache.has(f.id) && !f.buffer));
+
+    if (filesToHydrate.length === 0) return;
 
     setIsBuffering(true);
+
+    // Ensure we have a context for decoding
+    if (!audioContextRef.current) {
+        await initAudioContext();
+    }
     const ac = audioContextRef.current;
     if (!ac) {
       setIsBuffering(false);
       return;
     }
 
-    const filesToHydrate = files.filter(f => !f.buffer && f.url);
-    if (filesToHydrate.length === 0) {
-      setIsBuffering(false);
-      return;
-    }
-
     await Promise.all(filesToHydrate.map(async (file) => {
       try {
+        // First check cache
+        if (audioCache.has(file.id)) {
+            file.buffer = audioCache.get(file.id);
+            if (file.buffer) {
+                 file.duration = file.buffer.duration;
+            }
+            return;
+        }
+
+        // Decode if not in cache
         const response = await fetch(file.url);
         const arrayBuffer = await response.arrayBuffer();
         const audioBuffer = await ac.decodeAudioData(arrayBuffer);
+
+        // Cache and assign
+        audioCache.set(file.id, audioBuffer);
         file.buffer = audioBuffer;
         file.duration = audioBuffer.duration;
       } catch (error) {
@@ -69,7 +89,7 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
     }));
 
     setIsBuffering(false);
-  }, []);
+  }, [initAudioContext]);
 
   const stopPlayback = useCallback((resetTime?: boolean) => {
     sourceNodesRef.current.forEach(source => {
@@ -87,12 +107,12 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
     }
   }, []);
 
-  const playPause = useCallback(() => {
+  const playPause = useCallback(async () => {
     if (isPlaying) {
       stopPlayback(false);
       seekOffsetRef.current = currentTime;
     } else {
-      initAudioContext();
+      await initAudioContext();
       const ac = audioContextRef.current;
       if (!ac || !project) return;
 

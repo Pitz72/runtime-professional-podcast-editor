@@ -3,7 +3,9 @@ import { vi } from 'vitest'
 
 // Mock AudioContext and related APIs
 class MockAudioContext {
-  createBuffer = vi.fn()
+  createBuffer = vi.fn((channels, length, sampleRate) => {
+    return new MockAudioBuffer(channels, length, sampleRate);
+  })
   createGain = vi.fn()
   createDynamicsCompressor = vi.fn()
   createBiquadFilter = vi.fn()
@@ -11,6 +13,9 @@ class MockAudioContext {
   destination = {}
   currentTime = 0
   state = 'running'
+  close = vi.fn()
+  suspend = vi.fn()
+  resume = vi.fn()
 }
 
 class MockAudioBuffer {

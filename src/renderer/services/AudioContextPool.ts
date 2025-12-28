@@ -1,4 +1,4 @@
-import { useLogger } from '../hooks/useLogger';
+import logger from '../hooks/useLogger';
 
 interface PooledAudioContext {
   context: AudioContext;
@@ -11,7 +11,7 @@ class AudioContextPool {
   private contexts: Map<string, PooledAudioContext> = new Map();
   private maxContexts: number = 3; // Maximum number of contexts to keep in pool
   private cleanupInterval: number;
-  private logger = useLogger();
+  private logger = logger;
 
   constructor() {
     // Clean up unused contexts every 30 seconds
@@ -175,7 +175,8 @@ export default audioContextPool;
 
 // Hook for using the audio context pool
 export const useAudioContext = () => {
-  const logger = useLogger();
+  // Use the hook for component-level logging if needed, or just use the global logger
+  // For consistency with the original interface, we keep this.
 
   const getContext = async (sampleRate: number = 44100): Promise<AudioContext> => {
     return audioContextPool.getContext(sampleRate);

@@ -30,6 +30,10 @@ export class AudioCache {
   // Method to manually prune if needed, though browsers handle AudioBuffer GC if not referenced.
   // However, since we hold them in a Map, they are referenced.
   // We might need a mechanism to release buffers for files no longer in the project.
+
+  delete(id: string): boolean {
+      return this.buffers.delete(id);
+  }
 }
 
 export const audioCache = AudioCache.getInstance();

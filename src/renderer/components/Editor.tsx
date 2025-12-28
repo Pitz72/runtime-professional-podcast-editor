@@ -11,16 +11,18 @@ import { useMemoryCleanup } from '../hooks/useMemoryCleanup';
 import { useClipClipboard } from '../hooks/useClipClipboard';
 import { useKeyboardShortcuts, KeyboardShortcut } from '../hooks/useKeyboardShortcuts';
 import { usePreloadResources } from '../hooks/usePreloadResources';
-import { validateAudioFile } from '../services/audioUtils';
+import { useFileImporter } from '../hooks/useFileImporter';
+import { useAppStore, useProject } from '../store';
 import { audioCache } from '../services/AudioCache';
 
+const Editor: React.FC = () => {
+    const project = useProject();
+    const setProject = useAppStore(state => state.setProject);
+    const updateProject = useAppStore(state => state.updateProject);
+    const addTrackAction = useAppStore(state => state.addTrack);
+    const deleteTrackAction = useAppStore(state => state.deleteTrack);
+    // Real delete file from store needs a new action or manual update, let's use manual update for now via setProject
 
-interface EditorProps {
-    project: Project;
-    setProject: React.Dispatch<React.SetStateAction<Project | null>>;
-}
-
-const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
     const [selectedItem, setSelectedItem] = useState<{ type: 'track' | 'clip', id: string } | null>(null);
     const [zoomIndex, setZoomIndex] = useState(INITIAL_ZOOM_LEVEL);
 
@@ -30,13 +32,15 @@ const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
     const [audioState, audioActions] = useAudioEngine(project);
     const { performCleanup } = useMemoryCleanup(project);
     const clipboard = useClipClipboard();
+    const { importFiles } = useFileImporter();
 
     // Preload resources for better performance
     usePreloadResources();
 
     const handleSetMastering = useCallback((preset: CompressorSettings | undefined) => {
-        setProject(p => p ? { ...p, mastering: preset } : null);
-    }, [setProject]);
+        if (!project) return;
+        updateProject(p => ({ ...p, mastering: preset }));
+    }, [project, updateProject]);
 
     useEffect(() => {
         // Set default mastering on project load
@@ -52,73 +56,8 @@ const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
     }, [project?.files, audioActions]);
 
     const handleFileDrop = useCallback(async (files: File[]) => {
-        audioActions.initAudioContext();
-
-        // Validate files first
-        const validationPromises = files.map(file => validateAudioFile(file));
-        const validationResults = await Promise.all(validationPromises);
-
-        const validFiles = files.filter((file, index) => {
-            const result = validationResults[index];
-            if (!result.isValid) {
-                alert(`File "${file.name}" is invalid: ${result.error}`);
-                return false;
-            }
-            if (result.warnings && result.warnings.length > 0) {
-                console.warn(`File "${file.name}" warnings:`, result.warnings);
-                // Show warnings but still allow the file
-                result.warnings.forEach(warning => console.warn(warning));
-            }
-            return true;
-        });
-
-        if (validFiles.length === 0) {
-            return;
-        }
-
-        const newFilesPromises = validFiles.map(file => {
-            return new Promise<AudioFile | null>((resolve) => {
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    try {
-                        const dataUrl = e.target?.result as string;
-                        // To get duration, we still need to decode it.
-                        const response = await fetch(dataUrl);
-                        const arrayBuffer = await response.arrayBuffer();
-                        const audioContext = new AudioContext();
-                        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                        audioContext.close();
-
-                        const fileId = `file-${Date.now()}-${Math.random()}`;
-
-                        // Add to cache immediately
-                        audioCache.set(fileId, audioBuffer);
-
-                        resolve({
-                            id: fileId,
-                            name: file.name,
-                            url: dataUrl, // Save the Data URL
-                            type: file.type,
-                            duration: audioBuffer.duration,
-                            buffer: audioBuffer,
-                        });
-                    } catch (error) {
-                        console.error("Failed to decode audio file:", file.name, error);
-                        alert(`Could not decode audio file: ${file.name}`);
-                        resolve(null);
-                    }
-                };
-                reader.readAsDataURL(file); // Read file as Data URL
-            });
-        });
-
-        Promise.all(newFilesPromises).then(newFiles => {
-            const successfullyLoadedFiles = newFiles.filter((f): f is AudioFile => f !== null);
-            if (successfullyLoadedFiles.length > 0) {
-                setProject(p => p ? { ...p, files: [...p.files, ...successfullyLoadedFiles] } : null);
-            }
-        });
-    }, [audioActions, setProject]);
+        await importFiles(files);
+    }, [importFiles]);
 
     const handleStop = useCallback(() => {
         audioActions.stop();
@@ -133,58 +72,28 @@ const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
     }, [audioActions]);
 
     const addTrack = (kind: TrackKind) => {
-        setProject(p => {
-            if (!p) return null;
-            const newTrack: Track = {
-                id: `track-${Date.now()}`,
-                name: `${kind} ${p.tracks.filter(t => t.kind === kind).length + 1}`,
-                kind: kind,
-                clips: [],
-                volume: kind === TrackKind.Background ? 0.4 : kind === TrackKind.Voice ? 1.0 : 0.8,
-                isMuted: false,
-                isSolo: false,
-                isDuckingEnabled: kind === TrackKind.Music || kind === TrackKind.Background,
-            };
-            const tracks = [...p.tracks];
-            if (kind === TrackKind.Voice) {
-                let lastVoiceIndex = -1;
-                for (let i = tracks.length - 1; i >= 0; i--) {
-                    if (tracks[i].kind === TrackKind.Voice) {
-                        lastVoiceIndex = i;
-                        break;
-                    }
-                }
-
-                if (lastVoiceIndex !== -1) {
-                    tracks.splice(lastVoiceIndex + 1, 0, newTrack);
-                } else {
-                    tracks.push(newTrack);
-                }
-            } else {
-                tracks.push(newTrack);
-            }
-            return { ...p, tracks };
-        });
+        addTrackAction(kind);
     };
 
     const deleteTrack = (trackId: string) => {
-        setProject(p => {
-            if (!p) return null;
-            const newTracks = p.tracks.filter(t => t.id !== trackId);
-            // If the deleted track was selected, unselect it
-            if (selectedItem?.type === 'track' && selectedItem.id === trackId) {
-                setSelectedItem(null);
-            }
-            return { ...p, tracks: newTracks };
-        })
+        deleteTrackAction(trackId);
+        if (selectedItem?.type === 'track' && selectedItem.id === trackId) {
+            setSelectedItem(null);
+        }
     }
 
     const deleteFile = useCallback((fileId: string) => {
-        setProject(p => {
-            if (!p) return null;
+        if (!project) return;
 
-            // Remove the file from the files array
+        // Clear from cache to prevent memory leaks
+        audioCache.delete(fileId);
+
+        // We need to implement deleteFile in the store or do it manually here.
+        // Doing it manually to match previous logic but using store setter
+        updateProject(p => {
+             // Remove the file from the files array
             const newFiles = p.files.filter(f => f.id !== fileId);
+
 
             // Remove all clips that reference this file
             const newTracks = p.tracks.map(track => ({
@@ -192,19 +101,19 @@ const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
                 clips: track.clips.filter(clip => clip.fileId !== fileId)
             }));
 
-            // If a clip from this file was selected, unselect it
-            if (selectedItem?.type === 'clip') {
-                const clipExists = newTracks.some(track =>
-                    track.clips.some(clip => clip.id === selectedItem.id)
-                );
-                if (!clipExists) {
-                    setSelectedItem(null);
-                }
-            }
-
             return { ...p, files: newFiles, tracks: newTracks };
         });
-    }, [selectedItem, setSelectedItem]);
+
+        // If a clip from this file was selected, unselect it
+        if (selectedItem?.type === 'clip' && project) {
+             // This check is slightly complex because we need the *new* state to be 100% sure,
+             // but checking current state is mostly fine for UI
+             const fileClips = project.tracks.flatMap(t => t.clips).filter(c => c.fileId === fileId);
+             if (fileClips.some(c => c.id === selectedItem.id)) {
+                 setSelectedItem(null);
+             }
+        }
+    }, [project, updateProject, selectedItem, setSelectedItem]);
 
     const handleSaveProject = useCallback(() => {
         if (!project) return;
@@ -237,19 +146,10 @@ const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
     const handlePasteClip = useCallback((trackId: string, pasteTime: number) => {
         const newClip = clipboard.pasteClip(trackId, pasteTime);
         if (newClip) {
-            setProject(p => {
-                if (!p) return null;
-                return {
-                    ...p,
-                    tracks: p.tracks.map(track =>
-                        track.id === trackId
-                            ? { ...track, clips: [...track.clips, newClip] }
-                            : track
-                    )
-                };
-            });
+            const addClipAction = useAppStore.getState().addClip;
+            addClipAction(trackId, newClip);
         }
-    }, [clipboard, setProject]);
+    }, [clipboard]);
 
     // Keyboard shortcuts
     const keyboardShortcuts: KeyboardShortcut[] = [
@@ -280,17 +180,15 @@ const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
             action: () => {
                 if (selectedItem?.type === 'clip') {
                     // Find and delete the clip
-                    setProject(p => {
-                        if (!p) return null;
-                        return {
-                            ...p,
-                            tracks: p.tracks.map(track => ({
-                                ...track,
-                                clips: track.clips.filter(clip => clip.id !== selectedItem.id)
-                            }))
-                        };
-                    });
-                    setSelectedItem(null);
+                    // Need to find trackId for the clip
+                    if (!project) return;
+
+                    const track = project.tracks.find(t => t.clips.some(c => c.id === selectedItem.id));
+                    if (track) {
+                        const deleteClipAction = useAppStore.getState().deleteClip;
+                        deleteClipAction(track.id, selectedItem.id);
+                        setSelectedItem(null);
+                    }
                 }
             },
             description: 'Delete selected clip'

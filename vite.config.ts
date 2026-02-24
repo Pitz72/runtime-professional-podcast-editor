@@ -25,12 +25,6 @@ export default defineConfig(({ mode }) => {
         input: {
           main: path.resolve(__dirname, 'src/renderer/index.html'),
         },
-        manualChunks: {
-          'audio-analysis': ['src/renderer/hooks/useAudioAnalysis.ts'],
-          'ai-services': ['src/renderer/services/geminiService.ts'],
-          'audio-processing': ['src/renderer/services/audioUtils.ts', 'src/renderer/workers/audioProcessor.worker.ts'],
-          'ui-components': ['src/renderer/components/WaveformDisplay.tsx', 'src/renderer/components/PropertiesPanel.tsx']
-        }
       },
     },
     server: {

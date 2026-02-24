@@ -1,12 +1,15 @@
 {
   "name": "runtime-radio-podcast-toolkit",
   "private": true,
-  "version": "0.2.0",
-  "main": "dist/main/main.js",
+  "version": "0.5.2",
+  "main": "dist/main/main.cjs",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json -w\" \"wait-on tcp:5173 && wait-on dist/main/main.js && electron .\"",
-    "build": "tsc -p tsconfig.electron.json && vite build && electron-builder",
+    "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json -w\" \"wait-on tcp:5173 && wait-on dist/main/main.cjs && electron .\"",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.electron.json",
+    "build:app": "electron-builder --win",
+    "build": "npm run build:renderer && npm run build:main && npm run build:app",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test:run": "vitest run"
@@ -26,15 +29,47 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.21",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^39.2.4",
     "electron-builder": "^26.0.12",
     "electron-is-dev": "^3.0.1",
     "jsdom": "^27.0.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "vitest": "^3.2.4",
     "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.runtimeradio.podcast-toolkit",
+    "productName": "Runtime Radio Podcast Toolkit",
+    "directories": {
+      "output": "builds/v0.5.0"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Runtime Radio Podcast Toolkit"
+    }
   }
 }

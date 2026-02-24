@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.2] - 2026-02-24 - "Il Gran Consolidamento (Hotfix 2)"
+### Fix Critici
+- Risolto errore di sintassi Typescript e drag data format in `Timeline.tsx` (`Unexpected end of JSON input`) introdotto durante la patch v0.5.1 che bloccava il Drag & Drop dal File Bin.
+
+**Dettagli completi**: [v0.5.2.md](v0.5.2.md)
+
+---
+
+## [0.5.1] - 2026-02-24 - "Il Gran Consolidamento (Hotfix 1)"
+
+### Fix UX Critici
+- Drag and Drop File: fix del blocco UI del browser disabilitando la serializzazione dei pesanti `AudioBuffer` in favore dell'invio referenziale `{ id: file.id }`.
+- Click Proprietà File: estesi i tipi interni (`type: 'file'`) per gestire file click nel `FileBin.tsx` e la corretta visualizzazione delle metainformazioni base nel `PropertiesPanel.tsx`.
+
+**Dettagli completi**: [v0.5.1.md](v0.5.1.md)
+
+---
+
+## [0.5.0] - 2026-02-24 - "Il Gran Consolidamento"
+
+### Fix Critici
+- CSS: Tailwind CSS installato localmente (CDN non funzionava in Electron)
+- AudioContext: rimossa creazione globale, fix leak in 3 funzioni
+- Export: FLAC/AAC disabilitati (erano fake fallback a WAV)
+- ExportDialog: riscritto (importava hook inesistenti)
+- Versione: sincronizzata a 0.5.0
+
+### Codice Morto Eliminato
+- 7 file sorgente + 3 documenti obsoleti (~1800 righe)
+
+### Electron Professionale
+- Avvio massimizzato, menu nativo, IPC dialog, CSP
+
+### Documentazione
+- README riscritto, changelog ultra-dettagliato
+
+**Dettagli completi**: [v0.5.0.md](v0.5.0.md)
+
+---
+
 ## [1.0.0] - 2025-09-25 - "The Sonic Generational Evolution"
 
 ### 🎯 **MAJOR RELEASE OVERVIEW**

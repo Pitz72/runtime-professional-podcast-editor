@@ -20,7 +20,7 @@ interface EditorProps {
 }
 
 const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
-    const [selectedItem, setSelectedItem] = useState<{ type: 'track' | 'clip', id: string } | null>(null);
+    const [selectedItem, setSelectedItem] = useState<{ type: 'track' | 'clip' | 'file', id: string } | null>(null);
     const [zoomIndex, setZoomIndex] = useState(INITIAL_ZOOM_LEVEL);
 
     const timelineRef = useRef<TimelineHandle>(null);
@@ -193,6 +193,8 @@ const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
                 if (!clipExists) {
                     setSelectedItem(null);
                 }
+            } else if (selectedItem?.type === 'file' && selectedItem.id === fileId) {
+                setSelectedItem(null);
             }
 
             return { ...p, files: newFiles, tracks: newTracks };
@@ -312,7 +314,7 @@ const Editor: React.FC<EditorProps> = ({ project, setProject }) => {
             </header>
             <div className="flex flex-1 overflow-hidden">
                 <aside className="w-1/4 max-w-xs flex flex-col bg-gray-800 border-r border-gray-700">
-                    <FileBin files={project.files} onFileDrop={handleFileDrop} onFileDelete={deleteFile} />
+                    <FileBin files={project.files} onFileDrop={handleFileDrop} onFileDelete={deleteFile} onFileClick={(id) => setSelectedItem({ type: 'file', id })} />
                     <PropertiesPanel selectedItem={selectedItem} project={project} setProject={setProject} />
                 </aside>
                 <main className="flex-1 flex flex-col overflow-y-auto">

@@ -4,39 +4,9 @@ import { Project, Track, TrackKind, CompressorSettings } from '@shared/types';
 import { DUCKING_AMOUNT, DUCKING_ATTACK, DUCKING_RELEASE } from '../constants';
 import * as lamejs from 'lamejs';
 
-// Initialize Audio Context
-export const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+// NOTE: AudioContext is NOT created here. It must be created lazily
+// after a user interaction (browser policy). Each hook manages its own context.
 
-// Load AudioWorklet
-let workletNode: AudioWorkletNode | null = null;
-
-export async function initAudioWorklet() {
-    if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-    }
-
-    try {
-        // In Vite, we can import the worker URL directly
-        const processorUrl = new URL('../audio/processors/main-processor.ts', import.meta.url).href;
-        await audioContext.audioWorklet.addModule(processorUrl);
-
-        const streamProcessorUrl = new URL('../audio/processors/stream-processor.ts', import.meta.url).href;
-        await audioContext.audioWorklet.addModule(streamProcessorUrl);
-
-        workletNode = new AudioWorkletNode(audioContext, 'main-audio-processor');
-        workletNode.connect(audioContext.destination);
-
-        workletNode.port.onmessage = (event) => {
-            if (event.data.type === 'LEVELS') {
-                window.dispatchEvent(new CustomEvent('audio-levels', { detail: event.data.value }));
-            }
-        };
-
-        console.log('AudioWorklet initialized successfully');
-    } catch (error) {
-        console.error('Failed to initialize AudioWorklet:', error);
-    }
-}
 
 // Helper to build the audio graph for both playback and export
 export const buildAudioGraph = (
@@ -342,7 +312,9 @@ function resampleAudioBuffer(audioBuffer: AudioBuffer, targetSampleRate: number)
     const sourceLength = audioBuffer.length;
     const targetLength = Math.round(sourceLength * targetSampleRate / sourceSampleRate);
 
-    const resampledBuffer = new AudioContext().createBuffer(channels, targetLength, targetSampleRate);
+    // Use OfflineAudioContext to create buffer without leaking AudioContext
+    const offlineCtx = new OfflineAudioContext(channels, targetLength, targetSampleRate);
+    const resampledBuffer = offlineCtx.createBuffer(channels, targetLength, targetSampleRate);
 
     for (let channel = 0; channel < channels; channel++) {
         const sourceData = audioBuffer.getChannelData(channel);
@@ -413,8 +385,9 @@ export function normalizeAudioBuffer(audioBuffer: AudioBuffer): AudioBuffer {
         }
     }
 
-    // Create normalized buffer
-    const normalizedBuffer = new AudioContext().createBuffer(numberOfChannels, length, sampleRate);
+    // Create normalized buffer (use OfflineAudioContext to avoid leaking)
+    const offlineCtx = new OfflineAudioContext(numberOfChannels, length, sampleRate);
+    const normalizedBuffer = offlineCtx.createBuffer(numberOfChannels, length, sampleRate);
     const gain = peak > 0 ? 1.0 / peak : 1.0;
 
     for (let channel = 0; channel < numberOfChannels; channel++) {

@@ -7,9 +7,10 @@ interface FileBinProps {
   files: AudioFile[];
   onFileDrop: (files: File[]) => void;
   onFileDelete?: (fileId: string) => void;
+  onFileClick?: (fileId: string) => void;
 }
 
-const FileBin: React.FC<FileBinProps> = ({ files, onFileDrop, onFileDelete }) => {
+const FileBin: React.FC<FileBinProps> = ({ files, onFileDrop, onFileDelete, onFileClick }) => {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -35,7 +36,8 @@ const FileBin: React.FC<FileBinProps> = ({ files, onFileDrop, onFileDelete }) =>
   }, [onFileDrop]);
 
   const handleDragStart = (e: React.DragEvent<HTMLLIElement>, file: AudioFile) => {
-    e.dataTransfer.setData('application/json', JSON.stringify(file));
+    // Stringify only the ID. Use a custom format to avoid interference.
+    e.dataTransfer.setData('application/runtime-audio-file', JSON.stringify({ id: file.id }));
     e.dataTransfer.effectAllowed = 'copy';
   };
 
@@ -67,6 +69,7 @@ const FileBin: React.FC<FileBinProps> = ({ files, onFileDrop, onFileDelete }) =>
                 className="bg-gray-700 p-2 rounded-md cursor-grab active:cursor-grabbing hover:bg-gray-600 relative group"
                 draggable
                 onDragStart={(e) => handleDragStart(e, file)}
+                onClick={() => onFileClick && onFileClick(file.id)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">

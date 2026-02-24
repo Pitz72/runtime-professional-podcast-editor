@@ -101,8 +101,8 @@ const TransportControls: React.FC<TransportControlsProps> = ({
         >
           <option value="wav">WAV</option>
           <option value="mp3">MP3</option>
-          <option value="flac">FLAC (soon)</option>
-          <option value="aac">AAC (soon)</option>
+          <option value="flac" disabled>FLAC (coming soon)</option>
+          <option value="aac" disabled>AAC (coming soon)</option>
         </select>
       </div>
       <button

@@ -2,8 +2,8 @@ import React from 'react';
 import { Track, TrackKind } from '@shared/types';
 import { MusicIcon, MicIcon, SoundHighIcon, FXIcon } from './components/icons';
 
-export const APP_VERSION = '1.0.0';
-export const APP_VERSION_NAME = 'The Sonic Generational Evolution';
+export const APP_VERSION = '0.5.2';
+export const APP_VERSION_NAME = 'Il Gran Consolidamento (Hotfix 2)';
 export const APP_AUTHOR = 'Simone Pizzi';
 export const AI_PRESET_NAME = 'AI Enhanced';
 export const APP_NAME = 'Runtime Radio Podcast Toolkit';

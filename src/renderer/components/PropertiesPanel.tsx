@@ -7,7 +7,7 @@ import { AI_PRESET_NAME } from '../constants';
 
 
 interface PropertiesPanelProps {
-  selectedItem: { type: 'track' | 'clip', id: string } | null;
+  selectedItem: { type: 'track' | 'clip' | 'file', id: string } | null;
   project: Project;
   setProject: React.Dispatch<React.SetStateAction<Project | null>>;
 }
@@ -217,16 +217,34 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
     );
   };
 
+  const renderFileProperties = (fileId: string) => {
+    const file = project.files.find(f => f.id === fileId);
+    if (!file) return <p className="text-gray-500">File not found.</p>;
+
+    return (
+      <>
+        <h3 className="text-lg font-bold mb-2 break-all">{file.name}</h3>
+        <p className="text-sm text-gray-400 mb-4">File Properties</p>
+        <div className="space-y-2 text-sm">
+          <p><span className="font-semibold text-gray-300">File Type:</span> {file.type || 'audio/wav'}</p>
+          <p><span className="font-semibold text-gray-300">Duration:</span> {file.duration.toFixed(2)}s</p>
+        </div>
+      </>
+    );
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-y-auto">
       <h2 className="text-lg font-semibold p-3 bg-gray-900 border-b border-gray-700">Properties</h2>
       <div className="p-4">
         {!selectedItem ? (
-          <p className="text-gray-500">Select a track or a clip to see its properties.</p>
+          <p className="text-gray-500">Select a track, clip, or file to see its properties.</p>
         ) : selectedItem.type === 'track' ? (
           renderTrackProperties(selectedItem.id)
-        ) : (
+        ) : selectedItem.type === 'clip' ? (
           renderClipProperties(selectedItem.id)
+        ) : (
+          renderFileProperties(selectedItem.id)
         )}
       </div>
     </div>

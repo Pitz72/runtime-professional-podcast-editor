@@ -21,8 +21,8 @@ type Interaction = {
 interface TimelineProps {
   project: Project;
   setProject: React.Dispatch<React.SetStateAction<Project | null>>;
-  selectedItem: { type: 'track' | 'clip', id: string } | null;
-  onSelectItem: (item: { type: 'track' | 'clip', id: string } | null) => void;
+  selectedItem: { type: 'track' | 'clip' | 'file', id: string } | null;
+  onSelectItem: (item: { type: 'track' | 'clip' | 'file', id: string } | null) => void;
   onAddTrack: (kind: TrackKind) => void;
   onDeleteTrack: (trackId: string) => void;
   currentTime: number;
@@ -67,7 +67,10 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
     e.preventDefault();
     setDraggedOverTrack(null);
     try {
-      const fileData: AudioFile = JSON.parse(e.dataTransfer.getData('application/json'));
+      const dragData = e.dataTransfer.getData('application/runtime-audio-file');
+      if (!dragData) return; // Prevent parsing empty strings if other items are dragged
+
+      const fileData: { id: string } = JSON.parse(dragData);
       if (!fileData || !fileData.id) return;
 
       const file = project.files.find(f => f.id === fileData.id);

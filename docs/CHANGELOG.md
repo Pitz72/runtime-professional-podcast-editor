@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.1] - 2026-07-13 - "Fondamenta"
+
+> ⚠️ **Reboot del versioning.** Il refactoring è talmente profondo che il progetto riparte da v0.0.1. Le versioni precedenti (0.2.0 → 0.6.0) restano documentate qui sotto come storia della vecchia architettura.
+
+### Architettura — da web app a vera app desktop
+- **Stato unificato su Zustand**: eliminato lo "split-brain" tra store e `useState` locali. Lo store è l'unica fonte di verità per progetto, selezione, zoom, history.
+- **Undo/Redo reale**: history funzionante (snapshot strutturali che preservano gli `AudioBuffer`), collegata al menu nativo Edit → Undo/Redo (Ctrl+Z / Ctrl+Y). Limite 50 passi.
+- **Menu nativo collegato**: New / Open / Save / Save As / Export / Undo / Redo ora eseguono azioni reali via IPC (prima non facevano nulla).
+- **Persistenza su disco**: i progetti si salvano/caricano con i dialog nativi. I file audio sono referenziati per **path assoluto** e ri-decodificati al load — mai più Data URL base64 dentro il JSON. Formato con `schemaVersion` e validazione completa al caricamento (clip orfani scartati, volumi clampati, file mancanti segnalati).
+- **Protezione perdita dati**: dirty flag sincronizzato col main process; chiusura con modifiche non salvate → conferma nativa.
+- **Import file**: drag & drop dall'OS (path risolto via `webUtils.getPathForFile`) + pulsante "Import" con dialog nativo. Decodifica diretta da `ArrayBuffer` con un solo `AudioContext` condiviso.
+
+### Sicurezza
+- **Gemini rimosso completamente**: nessuna chiamata API esterna, nessuna chiave, nessun costo per gli utenti. Restano i preset curati locali (6 voice + 8 music + 8 mastering).
+- **IPC filesystem blindato**: letture limitate a estensioni audio/progetto con path assoluti; scritture consentite **solo** verso path scelti dall'utente tramite dialog nativi. I/O asincrono (niente più `readFileSync` che bloccava il main).
+- **Hardening finestra**: `sandbox: true`, `webSecurity` sempre attivo, `setWindowOpenHandler` (deny), blocco `will-navigate`, single-instance lock, CSP senza endpoint esterni.
+
+### Bug audio
+- **Fix catena EQ orfana**: i preset con solo equalizzatore (tutti i preset musica!) venivano silenziosamente bypassati in playback e in export. Ora la catena è source → compressore → EQ → gain.
+- **Export onesto**: rimossi FLAC/AAC finti (WAV rinominato). Formati reali: WAV e MP3. Export tramite dialog nativo di salvataggio.
+- Fix arrotondamento asimmetrico in `encodeWAV` (bug di precedenza operatori).
+
+### Qualità
+- `strict: true` in TypeScript (typecheck pulito su renderer e main), ESLint 9 flat config funzionante, suite Vitest riscritta e verde (16 test su encoding, normalizzazione, validazione, persistenza progetto).
+- Eliminate ~2.500 righe di codice morto o irraggiungibile: registrazione, export parallelo, worker impossibili (AudioContext in Web Worker), analisi LUFS mai montata, virtualizzazione mai usata, `UndoRedoHistory` con import inesistente che rompeva la build.
+- Rimosse dipendenze inutilizzate: `@google/genai`, `web-vitals`, `electron-is-dev`, `cross-env`, `@dnd-kit/sortable`, `@dnd-kit/utilities`.
+- Versione mostrata in un punto solo (About legge `app.getVersion()`); WelcomeScreen riscritta senza claim falsi.
+- Scorciatoie tastiera con guardia sugli input di testo (Canc/Ctrl+C non rubano più i tasti mentre si digita); ID generati con `crypto.randomUUID()`.
+
+**Dettagli completi**: [v0.0.1.md](v0.0.1.md)
+
+---
+
+## [0.6.0] - 2026-02-25 - "Il Nuovo Motore di Drag & Drop"
+### Major Refactoring - UI
+- Sostituzione integrale dell'inaffidabile `HTML5 Drag and Drop API` con l'engine professionale React `@dnd-kit`.
+- Implementazione "State-Driven" con clonazione fluttuante (`DragOverlay`) per performance e stabilità native superiori, annullando crash, string mismatch e interferenze di Electron.
+
+**Dettagli completi**: [v0.6.0.md](v0.6.0.md)
+
+---
+
 ## [0.5.2] - 2026-02-24 - "Il Gran Consolidamento (Hotfix 2)"
 ### Fix Critici
 - Risolto errore di sintassi Typescript e drag data format in `Timeline.tsx` (`Unexpected end of JSON input`) introdotto durante la patch v0.5.1 che bloccava il Drag & Drop dal File Bin.

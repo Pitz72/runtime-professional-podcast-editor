@@ -1,28 +1,27 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Project, Track, TrackKind, AudioFile, AudioClip } from '@shared/types';
-import { buildAudioGraph, encodeWAV, exportAudioBuffer, ExportOptions } from '../services/audioUtils';
+import { Project } from '@shared/types';
+import { buildAudioGraph, exportAudioBuffer, ExportFormat } from '../services/audioUtils';
 import { MASTERING_PRESETS } from '../presets';
 
 export interface AudioEngineState {
   isPlaying: boolean;
   currentTime: number;
-  isBuffering: boolean;
   isExporting: boolean;
 }
 
 export interface AudioEngineActions {
-  initAudioContext: () => void;
+  initAudioContext: () => AudioContext;
+  decodeAudioData: (data: ArrayBuffer) => Promise<AudioBuffer>;
   playPause: () => void;
   stop: () => void;
   seek: (time: number) => void;
-  exportAudio: (format?: 'wav' | 'mp3' | 'flac' | 'aac') => Promise<void>;
-  hydrateBuffers: (files: AudioFile[]) => Promise<void>;
+  /** Render the mix offline and return the encoded blob (null if the project is empty). */
+  exportAudio: (format?: ExportFormat) => Promise<Blob | null>;
 }
 
 export const useAudioEngine = (project: Project | null): [AudioEngineState, AudioEngineActions] => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [isBuffering, setIsBuffering] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -31,49 +30,24 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
   const playbackStartTimeRef = useRef(0);
   const seekOffsetRef = useRef(0);
 
-  const initAudioContext = useCallback(() => {
+  const initAudioContext = useCallback((): AudioContext => {
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = new AudioContext();
     }
     if (audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume();
+      void audioContextRef.current.resume();
     }
+    return audioContextRef.current;
   }, []);
 
-  const hydrateBuffers = useCallback(async (files: AudioFile[]) => {
-    if (!files.some(f => !f.buffer)) return;
-
-    setIsBuffering(true);
-    const ac = audioContextRef.current;
-    if (!ac) {
-      setIsBuffering(false);
-      return;
-    }
-
-    const filesToHydrate = files.filter(f => !f.buffer && f.url);
-    if (filesToHydrate.length === 0) {
-      setIsBuffering(false);
-      return;
-    }
-
-    await Promise.all(filesToHydrate.map(async (file) => {
-      try {
-        const response = await fetch(file.url);
-        const arrayBuffer = await response.arrayBuffer();
-        const audioBuffer = await ac.decodeAudioData(arrayBuffer);
-        file.buffer = audioBuffer;
-        file.duration = audioBuffer.duration;
-      } catch (error) {
-        console.error(`Failed to load audio for ${file.name}:`, error);
-      }
-    }));
-
-    setIsBuffering(false);
-  }, []);
+  const decodeAudioData = useCallback((data: ArrayBuffer): Promise<AudioBuffer> => {
+    const ac = initAudioContext();
+    return ac.decodeAudioData(data);
+  }, [initAudioContext]);
 
   const stopPlayback = useCallback((resetTime?: boolean) => {
     sourceNodesRef.current.forEach(source => {
-      try { source.stop(); } catch (e) { /* ignore */ }
+      try { source.stop(); } catch { /* already stopped */ }
     });
     sourceNodesRef.current.clear();
     if (animationFrameRef.current) {
@@ -92,11 +66,8 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
       stopPlayback(false);
       seekOffsetRef.current = currentTime;
     } else {
-      initAudioContext();
-      const ac = audioContextRef.current;
-      if (!ac || !project) return;
-
-      ac.resume();
+      const ac = initAudioContext();
+      if (!project) return;
 
       const soloTrack = project.tracks.find(t => t.isSolo);
       const tracksToPlay = soloTrack ? [soloTrack] : project.tracks.filter(t => !t.isMuted);
@@ -149,34 +120,23 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
     seekOffsetRef.current = newTime;
   }, [isPlaying]);
 
-  const exportAudio = useCallback(async (format: 'wav' | 'mp3' | 'flac' | 'aac' = 'wav') => {
-    if (!project || !window.OfflineAudioContext) {
-      alert('Audio export is not supported in this browser.');
-      return;
-    }
+  const exportAudio = useCallback(async (format: ExportFormat = 'wav'): Promise<Blob | null> => {
+    if (!project) return null;
 
     setIsExporting(true);
-
     try {
-      const totalDuration = Math.max(0, ...project.tracks.flatMap(t => {
-        return t.clips.map(c => {
-          if ((t.kind === TrackKind.Music || t.kind === TrackKind.Background) && c.isLooped) {
-            return c.startTime + c.duration;
-          }
-          return c.startTime + c.duration;
-        });
-      }));
+      const totalDuration = Math.max(0, ...project.tracks.flatMap(t =>
+        t.clips.map(c => c.startTime + c.duration)
+      ));
 
       if (totalDuration === 0) {
-        alert("Project is empty. Add some clips to export.");
-        setIsExporting(false);
-        return;
+        return null;
       }
 
       const projectWithMastering = {
         ...project,
         mastering: project.mastering || MASTERING_PRESETS[0].settings,
-      }
+      };
 
       const offlineContext = new OfflineAudioContext(2, Math.ceil(totalDuration * 44100), 44100);
       const { sources } = buildAudioGraph(offlineContext, projectWithMastering, projectWithMastering.tracks.filter(t => !t.isMuted), totalDuration);
@@ -187,26 +147,7 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
 
       const renderedBuffer = await offlineContext.startRendering();
 
-      const exportOptions: ExportOptions = {
-        format,
-        quality: 'professional',
-        normalize: true,
-        includeEffects: true
-      };
-
-      const exportedBlob = await exportAudioBuffer(renderedBuffer, exportOptions);
-
-      const url = URL.createObjectURL(exportedBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${project.name.replace(/\s/g, '_')}.${format}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error exporting audio:", error);
-      alert("An error occurred during audio export. See console for details.");
+      return await exportAudioBuffer(renderedBuffer, { format, normalize: true });
     } finally {
       setIsExporting(false);
     }
@@ -221,17 +162,16 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
   const state: AudioEngineState = {
     isPlaying,
     currentTime,
-    isBuffering,
-    isExporting
+    isExporting,
   };
 
   const actions: AudioEngineActions = {
     initAudioContext,
+    decodeAudioData,
     playPause,
     stop: () => stopPlayback(true),
     seek,
     exportAudio,
-    hydrateBuffers
   };
 
   return [state, actions];

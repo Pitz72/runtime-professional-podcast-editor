@@ -2,12 +2,11 @@ import React from 'react';
 import { Track, TrackKind } from '@shared/types';
 import { MusicIcon, MicIcon, SoundHighIcon, FXIcon } from './components/icons';
 
-export const APP_VERSION = '0.5.2';
-export const APP_VERSION_NAME = 'Il Gran Consolidamento (Hotfix 2)';
+export const APP_VERSION = '0.0.1';
+export const APP_VERSION_NAME = 'Fondamenta';
 export const APP_AUTHOR = 'Simone Pizzi';
-export const AI_PRESET_NAME = 'AI Enhanced';
 export const APP_NAME = 'Runtime Radio Podcast Toolkit';
-export const APP_DESCRIPTION = 'Professional Digital Audio Workstation for Podcast Production';
+export const APP_DESCRIPTION = 'Desktop podcast production toolkit';
 
 // Timeline display settings
 export const ZOOM_LEVELS = [5, 10, 15, 25, 50, 75, 100, 150]; // Pixels per second
@@ -19,9 +18,10 @@ export const DUCKING_AMOUNT = 0.2; // Duck to 20% of original volume
 export const DUCKING_ATTACK = 0.05; // 50ms to duck down
 export const DUCKING_RELEASE = 0.5; // 500ms to recover
 
-export const INITIAL_TRACKS: Track[] = [
+/** Fresh default tracks for a new project (never share references between projects). */
+export const createInitialTracks = (): Track[] => [
   {
-    id: 'track-1',
+    id: `track-${crypto.randomUUID()}`,
     name: 'Music',
     kind: TrackKind.Music,
     clips: [],
@@ -31,7 +31,7 @@ export const INITIAL_TRACKS: Track[] = [
     isDuckingEnabled: true,
   },
   {
-    id: 'track-2',
+    id: `track-${crypto.randomUUID()}`,
     name: 'Background',
     kind: TrackKind.Background,
     clips: [],
@@ -41,7 +41,7 @@ export const INITIAL_TRACKS: Track[] = [
     isDuckingEnabled: true,
   },
   {
-    id: 'track-3',
+    id: `track-${crypto.randomUUID()}`,
     name: 'Voice 1',
     kind: TrackKind.Voice,
     clips: [],
@@ -50,7 +50,7 @@ export const INITIAL_TRACKS: Track[] = [
     isSolo: false,
   },
   {
-    id: 'track-4',
+    id: `track-${crypto.randomUUID()}`,
     name: 'Sound FX',
     kind: TrackKind.FX,
     clips: [],

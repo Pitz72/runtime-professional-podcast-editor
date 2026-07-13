@@ -12,6 +12,18 @@ export interface KeyboardShortcut {
 
 export const useKeyboardShortcuts = (shortcuts: KeyboardShortcut[]) => {
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    // Never steal keystrokes from text inputs (Delete/Ctrl+C while typing
+    // must edit text, not the timeline).
+    const target = event.target as HTMLElement | null;
+    if (target && (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable
+    )) {
+      return;
+    }
+
     // Find matching shortcut
     const matchingShortcut = shortcuts.find(shortcut => {
       const keyMatches = event.key.toLowerCase() === shortcut.key.toLowerCase();

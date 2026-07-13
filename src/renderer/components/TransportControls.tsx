@@ -11,9 +11,10 @@ interface TransportControlsProps {
   onSave: () => void;
   onExport: (format: ExportFormat) => void;
   onMasteringChange: (preset: CompressorSettings | undefined) => void;
-  isBuffering: boolean;
   isExporting: boolean;
   currentMastering?: CompressorSettings;
+  exportFormat: ExportFormat;
+  onExportFormatChange: (format: ExportFormat) => void;
 }
 
 const TransportControls: React.FC<TransportControlsProps> = ({
@@ -23,32 +24,22 @@ const TransportControls: React.FC<TransportControlsProps> = ({
   onSave,
   onExport,
   onMasteringChange,
-  isBuffering,
   isExporting,
-  currentMastering
+  currentMastering,
+  exportFormat,
+  onExportFormatChange
 }) => {
-  const [selectedFormat, setSelectedFormat] = React.useState<ExportFormat>('wav');
-
-  const isBusy = isBuffering || isExporting;
+  const isBusy = isExporting;
   const exportButtonText = isExporting ? 'Exporting...' : 'Export';
 
-  const handleExport = () => {
-    onExport(selectedFormat);
-  };
-
   const handleMasteringSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const presetName = e.target.value;
-    if (!presetName) {
-      onMasteringChange(undefined);
-      return;
-    }
-    const preset = MASTERING_PRESETS.find(p => p.name === presetName);
+    const preset = MASTERING_PRESETS.find(p => p.name === e.target.value);
     onMasteringChange(preset?.settings);
   };
 
   const selectedMasteringName = MASTERING_PRESETS.find(p =>
     JSON.stringify(p.settings) === JSON.stringify(currentMastering)
-  )?.name || '';
+  )?.name || MASTERING_PRESETS[0].name;
 
   return (
     <div className="flex items-center gap-4">
@@ -57,6 +48,7 @@ const TransportControls: React.FC<TransportControlsProps> = ({
           onClick={onStop}
           className="p-2 text-gray-300 hover:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
           disabled={isBusy}
+          aria-label="Stop"
         >
           <StopIcon className="w-5 h-5" />
         </button>
@@ -64,6 +56,7 @@ const TransportControls: React.FC<TransportControlsProps> = ({
           onClick={onPlayPause}
           className="p-2 bg-purple-600 text-white hover:bg-purple-700 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-purple-800 disabled:cursor-not-allowed"
           disabled={isBusy}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
         </button>
@@ -94,19 +87,17 @@ const TransportControls: React.FC<TransportControlsProps> = ({
         <label htmlFor="export-format" className="text-sm font-medium text-gray-400">Format:</label>
         <select
           id="export-format"
-          value={selectedFormat}
-          onChange={(e) => setSelectedFormat(e.target.value as ExportFormat)}
+          value={exportFormat}
+          onChange={(e) => onExportFormatChange(e.target.value as ExportFormat)}
           disabled={isBusy || isPlaying}
           className="px-2 py-1 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:ring-green-500 focus:border-green-500 disabled:opacity-50"
         >
           <option value="wav">WAV</option>
           <option value="mp3">MP3</option>
-          <option value="flac" disabled>FLAC (coming soon)</option>
-          <option value="aac" disabled>AAC (coming soon)</option>
         </select>
       </div>
       <button
-        onClick={handleExport}
+        onClick={() => onExport(exportFormat)}
         className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
         disabled={isBusy || isPlaying}
       >

@@ -8,14 +8,16 @@ export enum TrackKind {
 export interface AudioFile {
   id: string;
   name: string;
-  url: string; // Object URL for saving/re-loading
+  /** Absolute path on disk. Files without a path cannot be reloaded after saving. */
+  path?: string;
   type: string;
   duration: number;
-  buffer?: AudioBuffer; // Store the decoded audio data for performance
+  /** Decoded audio data, never serialized. */
+  buffer?: AudioBuffer;
 }
 
 export interface AudioClip {
-  id:string;
+  id: string;
   fileId: string;
   trackId: string;
   startTime: number; // in seconds
@@ -57,7 +59,11 @@ export interface Track {
   isDuckingEnabled?: boolean;
 }
 
+/** Version of the on-disk project schema, independent of the app version. */
+export const PROJECT_SCHEMA_VERSION = 1;
+
 export interface Project {
+  schemaVersion?: number;
   name: string;
   tracks: Track[];
   files: AudioFile[];
@@ -65,10 +71,6 @@ export interface Project {
 }
 
 export type SelectedItem = {
-  type: 'track' | 'clip';
+  type: 'track' | 'clip' | 'file';
   id: string;
 } | null;
-
-export type TimelineHandle = {
-  scrollToTime: (time: number) => void;
-};

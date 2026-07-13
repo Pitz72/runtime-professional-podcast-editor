@@ -1,76 +1,49 @@
 import '@testing-library/jest-dom'
-import { vi } from 'vitest'
 
-// Mock AudioContext and related APIs
-class MockAudioContext {
-  createBuffer = vi.fn()
-  createGain = vi.fn()
-  createDynamicsCompressor = vi.fn()
-  createBiquadFilter = vi.fn()
-  decodeAudioData = vi.fn()
-  destination = {}
+// Functional mock of AudioBuffer backed by real Float32Array storage,
+// so encoding/normalization code paths can be exercised in jsdom.
+class MockAudioBuffer {
+  numberOfChannels: number
+  length: number
+  sampleRate: number
+  duration: number
+  private channels: Float32Array[]
+
+  // Mirrors the real AudioBuffer(options) constructor.
+  constructor(options: { numberOfChannels?: number; length: number; sampleRate: number }) {
+    this.numberOfChannels = options.numberOfChannels ?? 1
+    this.length = options.length
+    this.sampleRate = options.sampleRate
+    this.duration = options.length / options.sampleRate
+    this.channels = Array.from({ length: this.numberOfChannels }, () => new Float32Array(this.length))
+  }
+
+  getChannelData(channel: number): Float32Array {
+    return this.channels[channel]
+  }
+}
+
+class MockBaseAudioContext {
   currentTime = 0
   state = 'running'
+  destination = {}
+
+  createBuffer(numberOfChannels: number, length: number, sampleRate: number) {
+    return new MockAudioBuffer({ numberOfChannels, length, sampleRate })
+  }
 }
 
-class MockAudioBuffer {
-  constructor(
-    public numberOfChannels: number,
-    public length: number,
-    public sampleRate: number
-  ) {}
-
-  getChannelData = vi.fn(() => new Float32Array(this.length))
+class MockAudioContext extends MockBaseAudioContext {
+  close() { return Promise.resolve() }
+  resume() { return Promise.resolve() }
 }
 
-global.AudioContext = MockAudioContext as any
-global.AudioBuffer = MockAudioBuffer as any
-global.OfflineAudioContext = MockAudioContext as any
+class MockOfflineAudioContext extends MockBaseAudioContext {}
 
-// Mock Web Audio API
-Object.defineProperty(window, 'AudioContext', {
-  writable: true,
-  value: MockAudioContext
+Object.assign(globalThis, {
+  AudioContext: MockAudioContext,
+  OfflineAudioContext: MockOfflineAudioContext,
+  AudioBuffer: MockAudioBuffer,
 })
 
-Object.defineProperty(window, 'OfflineAudioContext', {
-  writable: true,
-  value: MockAudioContext
-})
-
-// Mock fetch for data URL handling
-global.fetch = vi.fn()
-
-// Mock URL APIs
-global.URL.createObjectURL = vi.fn(() => 'mock-url')
-global.URL.revokeObjectURL = vi.fn()
-
-// Mock FileReader
-const MockFileReader = vi.fn().mockImplementation(() => ({
-  readAsDataURL: vi.fn(function() {
-    // Simulate async loading
-    setTimeout(() => {
-      if (this.onload) {
-        this.result = 'data:audio/wav;base64,mockdata'
-        this.onload({ target: { result: this.result } } as any)
-      }
-    }, 0)
-  }),
-  readAsArrayBuffer: vi.fn(function() {
-    setTimeout(() => {
-      if (this.onload) {
-        this.result = new ArrayBuffer(1024)
-        this.onload({ target: { result: this.result } } as any)
-      }
-    }, 0)
-  }),
-  onload: null,
-  onerror: null,
-  result: null,
-  EMPTY: 0,
-  LOADING: 1,
-  DONE: 2,
-  readyState: 0
-}))
-
-global.FileReader = MockFileReader as any
+export { MockAudioBuffer }

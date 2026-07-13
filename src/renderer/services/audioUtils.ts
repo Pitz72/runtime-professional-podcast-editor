@@ -1,6 +1,6 @@
-// Audio processing utilities extracted from Editor component
+// Audio processing utilities shared by playback and export.
 
-import { Project, Track, TrackKind, CompressorSettings } from '@shared/types';
+import { Project, Track, TrackKind } from '@shared/types';
 import { DUCKING_AMOUNT, DUCKING_ATTACK, DUCKING_RELEASE } from '../constants';
 import * as lamejs from 'lamejs';
 
@@ -31,12 +31,12 @@ export const buildAudioGraph = (
         masterBus.connect(context.destination);
     }
 
-    const sources: { source: AudioBufferSourceNode, clip: any }[] = [];
+    const sources: { source: AudioBufferSourceNode, clip: { id: string; fileId: string; startTime: number; duration: number; offset: number } }[] = [];
     const voiceClips = project.tracks
         .filter(t => t.kind === TrackKind.Voice)
         .flatMap(t => t.clips);
 
-    let voiceEvents: { time: number, type: 'start' | 'end' }[] = [];
+    const voiceEvents: { time: number, type: 'start' | 'end' }[] = [];
     if (voiceClips.length > 0) {
         voiceClips.forEach(c => {
             voiceEvents.push({ time: c.startTime, type: 'start' });
@@ -69,22 +69,23 @@ export const buildAudioGraph = (
             });
         }
 
+        // --- EFFECTS CHAIN ---
+        // Build the chain back-to-front so that trackHead is always the entry
+        // point sources connect to: source -> [compressor] -> [EQ...] -> gain.
         let trackHead: AudioNode = trackGain;
 
-        // --- EFFECTS CHAIN ---
         if (track.effects) {
             const { compressor: compressorSettings, equalizer: eqSettingsList } = track.effects;
-            let lastNodeInFXChain: AudioNode = trackGain;
 
-            if (eqSettingsList) {
+            if (eqSettingsList && eqSettingsList.length > 0) {
                 [...eqSettingsList].reverse().forEach(eqSettings => {
                     const filter = context.createBiquadFilter();
                     filter.type = eqSettings.type;
                     filter.frequency.setValueAtTime(eqSettings.frequency, context.currentTime);
                     if (typeof eqSettings.gain === 'number') filter.gain.setValueAtTime(eqSettings.gain, context.currentTime);
                     if (typeof eqSettings.Q === 'number') filter.Q.setValueAtTime(eqSettings.Q, context.currentTime);
-                    filter.connect(lastNodeInFXChain);
-                    lastNodeInFXChain = filter;
+                    filter.connect(trackHead);
+                    trackHead = filter;
                 });
             }
 
@@ -95,7 +96,7 @@ export const buildAudioGraph = (
                 compressor.ratio.setValueAtTime(compressorSettings.ratio, context.currentTime);
                 compressor.attack.setValueAtTime(compressorSettings.attack, context.currentTime);
                 compressor.release.setValueAtTime(compressorSettings.release, context.currentTime);
-                compressor.connect(lastNodeInFXChain);
+                compressor.connect(trackHead);
                 trackHead = compressor;
             }
         }
@@ -133,7 +134,7 @@ export function encodeWAV(audioBuffer: AudioBuffer): Blob {
     const length = audioBuffer.length * numOfChan * 2 + 44;
     const buffer = new ArrayBuffer(length);
     const view = new DataView(buffer);
-    const channels = [];
+    const channels: Float32Array[] = [];
     let i, sample;
     let offset = 0;
     let pos = 0;
@@ -150,7 +151,7 @@ export function encodeWAV(audioBuffer: AudioBuffer): Blob {
     setUint32(audioBuffer.sampleRate);
     setUint32(audioBuffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
     setUint16(numOfChan * 2); // block-align
-    setUint16(16); // 16-bit inventory
+    setUint16(16); // 16-bit samples
 
     setUint32(0x61746164); // "data" - chunk
     setUint32(length - pos - 4); // chunk length
@@ -163,7 +164,7 @@ export function encodeWAV(audioBuffer: AudioBuffer): Blob {
     while (pos < length) {
         for (i = 0; i < numOfChan; i++) {
             sample = Math.max(-1, Math.min(1, channels[i][offset])); // clamp
-            sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0; // scale to 16-bit signed int
+            sample = Math.round(sample < 0 ? sample * 32768 : sample * 32767); // scale to 16-bit signed int
             view.setInt16(pos, sample, true); // write 16-bit sample
             pos += 2;
         }
@@ -183,46 +184,17 @@ export function encodeWAV(audioBuffer: AudioBuffer): Blob {
     }
 }
 
-// Export format utilities
-export type ExportFormat = 'wav' | 'mp3' | 'flac' | 'aac';
+// Export format utilities. Only formats with real encoders are offered.
+export type ExportFormat = 'wav' | 'mp3';
 
 export interface ExportOptions {
     format: ExportFormat;
-    quality: 'cd' | 'professional' | 'high-end';
     normalize: boolean;
-    includeEffects: boolean;
-    bitrate?: number; // for MP3/AAC
+    bitrate?: number; // for MP3
 }
 
 export function getExportMimeType(format: ExportFormat): string {
-    switch (format) {
-        case 'wav': return 'audio/wav';
-        case 'mp3': return 'audio/mpeg';
-        case 'flac': return 'audio/flac';
-        case 'aac': return 'audio/aac';
-        default: return 'audio/wav';
-    }
-}
-
-export function getExportFileExtension(format: ExportFormat): string {
-    return format;
-}
-
-export function getBitrateForQuality(quality: 'cd' | 'professional' | 'high-end', format: ExportFormat): number {
-    if (format === 'mp3') {
-        switch (quality) {
-            case 'cd': return 128;
-            case 'professional': return 192;
-            case 'high-end': return 320;
-        }
-    } else if (format === 'aac') {
-        switch (quality) {
-            case 'cd': return 128;
-            case 'professional': return 192;
-            case 'high-end': return 256;
-        }
-    }
-    return 192; // default
+    return format === 'mp3' ? 'audio/mpeg' : 'audio/wav';
 }
 
 export function getSampleRateForLame(sampleRate: number): number {
@@ -235,17 +207,6 @@ export function getSampleRateForLame(sampleRate: number): number {
     if (sampleRate >= 12000) return 12000;
     if (sampleRate >= 11025) return 11025;
     return 8000;
-}
-
-export function getWaveformQualityForZoom(zoomIndex: number): 'low' | 'medium' | 'high' {
-    // ZOOM_LEVELS = [5, 10, 15, 25, 50, 75, 100, 150]
-    if (zoomIndex <= 2) return 'low';     // Zoom levels 0-2 (5-15 px/sec): low quality
-    if (zoomIndex <= 4) return 'medium';  // Zoom levels 3-4 (25-50 px/sec): medium quality
-    return 'high';                        // Zoom levels 5+ (75+ px/sec): high quality
-}
-
-export function shouldVirtualizeTimeline(trackCount: number, clipCount: number): boolean {
-    return trackCount > 10 || clipCount > 50;
 }
 
 // MP3 encoding using lamejs
@@ -341,31 +302,15 @@ export async function exportAudioBuffer(
     audioBuffer: AudioBuffer,
     options: ExportOptions
 ): Promise<Blob> {
-    // Apply normalization if requested
     let processedBuffer = audioBuffer;
     if (options.normalize) {
         processedBuffer = normalizeAudioBuffer(audioBuffer);
     }
 
-    // Export based on format
     switch (options.format) {
-        case 'wav':
-            return encodeWAV(processedBuffer);
-
         case 'mp3':
-            const bitrate = options.bitrate || getBitrateForQuality(options.quality, 'mp3');
-            return encodeMP3(processedBuffer, bitrate);
-
-        case 'flac':
-            // FLAC not implemented yet - fallback to WAV
-            console.warn('FLAC export not implemented, exporting as WAV');
-            return encodeWAV(processedBuffer);
-
-        case 'aac':
-            // AAC not implemented yet - fallback to WAV
-            console.warn('AAC export not implemented, exporting as WAV');
-            return encodeWAV(processedBuffer);
-
+            return encodeMP3(processedBuffer, options.bitrate ?? 192);
+        case 'wav':
         default:
             return encodeWAV(processedBuffer);
     }
@@ -402,37 +347,6 @@ export function normalizeAudioBuffer(audioBuffer: AudioBuffer): AudioBuffer {
     return normalizedBuffer;
 }
 
-// Memory management utilities
-export function cleanupUnusedAudioBuffers(project: any, activeFileIds: Set<string>): void {
-    // Mark buffers for cleanup if they're not actively used
-    project.files.forEach((file: any) => {
-        if (file.buffer && !activeFileIds.has(file.id)) {
-            // Buffer is not currently active, can be cleaned up
-            file.buffer = undefined;
-        }
-    });
-}
-
-export function getActiveFileIds(project: any): Set<string> {
-    const activeIds = new Set<string>();
-
-    // Add files used in clips
-    project.tracks.forEach((track: any) => {
-        track.clips.forEach((clip: any) => {
-            activeIds.add(clip.fileId);
-        });
-    });
-
-    return activeIds;
-}
-
-export function forceGarbageCollection(): void {
-    // Force garbage collection if available (Chrome/Edge)
-    if ((window as any).gc) {
-        (window as any).gc();
-    }
-}
-
 // File validation utilities
 export interface FileValidationResult {
     isValid: boolean;
@@ -461,13 +375,16 @@ export function formatFileSize(bytes: number): string {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-export async function validateAudioFile(file: File): Promise<FileValidationResult> {
+/**
+ * Cheap pre-checks before decoding (size and declared type).
+ * Real validation happens when the full file is decoded.
+ */
+export function validateAudioFile(file: { size: number; type: string; name: string }): FileValidationResult {
     const result: FileValidationResult = {
         isValid: true,
         warnings: []
     };
 
-    // Check file size
     if (file.size > MAX_FILE_SIZE) {
         result.isValid = false;
         result.error = `File too large: ${formatFileSize(file.size)}. Maximum allowed: ${formatFileSize(MAX_FILE_SIZE)}`;
@@ -480,39 +397,13 @@ export async function validateAudioFile(file: File): Promise<FileValidationResul
         return result;
     }
 
-    // Check MIME type
     if (!SUPPORTED_AUDIO_TYPES.includes(file.type) && !file.name.match(/\.(wav|mp3|ogg|flac|aac|m4a|mp4)$/i)) {
-        result.warnings.push(`Unsupported file type: ${file.type || 'unknown'}. Supported: ${SUPPORTED_AUDIO_TYPES.join(', ')}`);
+        result.warnings!.push(`Unrecognized file type: ${file.type || 'unknown'}.`);
     }
 
-    // Try to validate by attempting to decode a small portion
-    try {
-        const arrayBuffer = await readFileChunk(file, 0, Math.min(1024 * 1024, file.size)); // Read first 1MB
-        const audioContext = new AudioContext();
-
-        // Quick validation - try to decode
-        await audioContext.decodeAudioData(arrayBuffer.slice());
-
-        audioContext.close();
-    } catch (error) {
-        result.isValid = false;
-        result.error = `File appears to be corrupted or not a valid audio file: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        return result;
-    }
-
-    // Additional warnings
     if (file.size > 500 * 1024 * 1024) { // 500MB
-        result.warnings.push('Large file detected. Loading may be slow and use significant memory.');
+        result.warnings!.push('Large file detected. Loading may be slow and use significant memory.');
     }
 
     return result;
-}
-
-async function readFileChunk(file: File, start: number, length: number): Promise<ArrayBuffer> {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as ArrayBuffer);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsArrayBuffer(file.slice(start, start + length));
-    });
 }

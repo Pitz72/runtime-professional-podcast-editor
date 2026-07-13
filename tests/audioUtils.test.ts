@@ -1,213 +1,179 @@
-// Automated tests for audioUtils functions using Vitest
+// Automated tests for audio utilities and project persistence.
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   encodeWAV,
   normalizeAudioBuffer,
-  getActiveFileIds,
-  cleanupUnusedAudioBuffers,
   validateAudioFile,
-  getWaveformQualityForZoom,
-  getBitrateForQuality
-} from '../services/audioUtils'
+  getSampleRateForLame,
+  formatFileSize,
+} from '../src/renderer/services/audioUtils'
+import { parseProject, serializeProject } from '../src/renderer/services/projectIO'
+import { Project, TrackKind, PROJECT_SCHEMA_VERSION } from '../src/shared/types'
 
-// Mock AudioContext and AudioBuffer for testing
-function createMockAudioBuffer(length: number = 100, sampleRate: number = 44100): AudioBuffer {
-  const audioContext = new AudioContext()
-  const buffer = audioContext.createBuffer(2, length, sampleRate)
-
-  // Fill with test data
+function createTestBuffer(length: number = 100, sampleRate: number = 44100, amplitude: number = 0.5): AudioBuffer {
+  const buffer = new AudioBuffer({ numberOfChannels: 2, length, sampleRate })
   for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
     const channelData = buffer.getChannelData(channel)
     for (let i = 0; i < channelData.length; i++) {
-      channelData[i] = Math.sin(i * 0.1) * 0.5 // Sine wave
+      channelData[i] = Math.sin(i * 0.1) * amplitude
     }
   }
-
   return buffer
 }
 
-describe('audioUtils', () => {
-  beforeEach(() => {
-    // Reset all mocks before each test
-    vi.clearAllMocks()
+describe('encodeWAV', () => {
+  it('encodes an audio buffer to a WAV blob with the right size', () => {
+    const buffer = createTestBuffer(100)
+    const wavBlob = encodeWAV(buffer)
+
+    expect(wavBlob).toBeInstanceOf(Blob)
+    expect(wavBlob.type).toBe('audio/wav')
+    // 44-byte header + samples * channels * 2 bytes
+    expect(wavBlob.size).toBe(44 + 100 * 2 * 2)
   })
 
-  describe('encodeWAV', () => {
-    it('should encode audio buffer to WAV blob', () => {
-      const buffer = createMockAudioBuffer()
-      const wavBlob = encodeWAV(buffer)
+  it('handles an empty buffer', () => {
+    const buffer = createTestBuffer(0)
+    const wavBlob = encodeWAV(buffer)
 
-      expect(wavBlob).toBeInstanceOf(Blob)
-      expect(wavBlob.type).toBe('audio/wav')
-      expect(wavBlob.size).toBeGreaterThan(0)
-    })
-
-    it('should handle empty buffer', () => {
-      const buffer = createMockAudioBuffer(0)
-      const wavBlob = encodeWAV(buffer)
-
-      expect(wavBlob).toBeInstanceOf(Blob)
-      expect(wavBlob.size).toBeGreaterThan(44) // WAV header size
-    })
+    expect(wavBlob.size).toBe(44)
   })
+})
 
-  describe('normalizeAudioBuffer', () => {
-    it('should normalize audio buffer to prevent clipping', () => {
-      const buffer = createMockAudioBuffer()
-      const normalized = normalizeAudioBuffer(buffer)
+describe('normalizeAudioBuffer', () => {
+  it('scales the peak up to 1.0 without clipping', () => {
+    const buffer = createTestBuffer(1000, 44100, 0.25)
+    const normalized = normalizeAudioBuffer(buffer)
 
-      expect(normalized).toBeInstanceOf(AudioBuffer)
-      expect(normalized.length).toBe(buffer.length)
-      expect(normalized.sampleRate).toBe(buffer.sampleRate)
-      expect(normalized.numberOfChannels).toBe(buffer.numberOfChannels)
+    expect(normalized.length).toBe(buffer.length)
+    expect(normalized.sampleRate).toBe(buffer.sampleRate)
+    expect(normalized.numberOfChannels).toBe(buffer.numberOfChannels)
 
-      // Check that peak is at or below 1.0
-      let maxPeak = 0
-      for (let channel = 0; channel < normalized.numberOfChannels; channel++) {
-        const data = normalized.getChannelData(channel)
-        for (const sample of data) {
-          maxPeak = Math.max(maxPeak, Math.abs(sample))
-        }
+    let maxPeak = 0
+    for (let channel = 0; channel < normalized.numberOfChannels; channel++) {
+      const data = normalized.getChannelData(channel)
+      for (const sample of data) {
+        maxPeak = Math.max(maxPeak, Math.abs(sample))
       }
-      expect(maxPeak).toBeLessThanOrEqual(1.0)
-    })
+    }
+    expect(maxPeak).toBeGreaterThan(0.99)
+    expect(maxPeak).toBeLessThanOrEqual(1.0)
   })
 
-  describe('getActiveFileIds', () => {
-    it('should return set of active file IDs', () => {
-      const mockProject = {
-        tracks: [
-          {
-            clips: [
-              { fileId: 'file1' },
-              { fileId: 'file2' }
-            ]
-          },
-          {
-            clips: [
-              { fileId: 'file1' },
-              { fileId: 'file3' }
-            ]
-          }
-        ]
-      }
+  it('leaves a silent buffer untouched', () => {
+    const buffer = createTestBuffer(100, 44100, 0)
+    const normalized = normalizeAudioBuffer(buffer)
+    expect(Math.max(...normalized.getChannelData(0))).toBe(0)
+  })
+})
 
-      const activeIds = getActiveFileIds(mockProject)
-
-      expect(activeIds).toBeInstanceOf(Set)
-      expect(activeIds.has('file1')).toBe(true)
-      expect(activeIds.has('file2')).toBe(true)
-      expect(activeIds.has('file3')).toBe(true)
-      expect(activeIds.size).toBe(3)
-    })
-
-    it('should handle empty project', () => {
-      const mockProject = { tracks: [] }
-      const activeIds = getActiveFileIds(mockProject)
-
-      expect(activeIds.size).toBe(0)
-    })
+describe('validateAudioFile', () => {
+  it('accepts a normal audio file', () => {
+    const result = validateAudioFile({ size: 2048, type: 'audio/wav', name: 'test.wav' })
+    expect(result.isValid).toBe(true)
+    expect(result.error).toBeUndefined()
   })
 
-  describe('cleanupUnusedAudioBuffers', () => {
-    it('should clean up unused buffers', () => {
-      const mockProject = {
-        files: [
-          { id: 'file1', buffer: { test: 'data' } },
-          { id: 'file2', buffer: { test: 'data' } },
-          { id: 'file3', buffer: { test: 'data' } }
-        ]
-      }
-
-      const activeIds = new Set(['file1', 'file2'])
-      cleanupUnusedAudioBuffers(mockProject, activeIds)
-
-      expect(mockProject.files[0].buffer).toBeDefined() // file1 active
-      expect(mockProject.files[1].buffer).toBeDefined() // file2 active
-      expect(mockProject.files[2].buffer).toBeUndefined() // file3 inactive
-    })
-
-    it('should not affect files without buffers', () => {
-      const mockProject = {
-        files: [
-          { id: 'file1', buffer: undefined },
-          { id: 'file2', buffer: { test: 'data' } }
-        ]
-      }
-
-      const activeIds = new Set(['file1'])
-      cleanupUnusedAudioBuffers(mockProject, activeIds)
-
-      expect(mockProject.files[0].buffer).toBeUndefined()
-      expect(mockProject.files[1].buffer).toBeUndefined() // cleaned up
-    })
+  it('rejects a file that is too large', () => {
+    const result = validateAudioFile({ size: 3 * 1024 * 1024 * 1024, type: 'audio/wav', name: 'large.wav' })
+    expect(result.isValid).toBe(false)
+    expect(result.error).toContain('too large')
   })
 
-  describe('validateAudioFile', () => {
-    it('should validate a proper audio file', async () => {
-      // Create a file with proper size by using a Uint8Array
-      const data = new Uint8Array(2048) // 2KB
-      const mockFile = new File([data], 'test.wav', { type: 'audio/wav' })
-
-      const result = await validateAudioFile(mockFile)
-
-      expect(result.isValid).toBe(true)
-      expect(result.error).toBeUndefined()
-    })
-
-    it('should reject file too large', async () => {
-      // Create a large file (3GB)
-      const data = new Uint8Array(1024) // Small data but we'll mock the size
-      const mockFile = new File([data], 'large.wav', { type: 'audio/wav' })
-      Object.defineProperty(mockFile, 'size', { value: 3 * 1024 * 1024 * 1024, writable: false })
-
-      const result = await validateAudioFile(mockFile)
-
-      expect(result.isValid).toBe(false)
-      expect(result.error).toContain('too large')
-    })
-
-    it('should reject file too small', async () => {
-      const data = new Uint8Array(512) // 512 bytes
-      const mockFile = new File([data], 'small.wav', { type: 'audio/wav' })
-
-      const result = await validateAudioFile(mockFile)
-
-      expect(result.isValid).toBe(false)
-      expect(result.error).toContain('too small')
-    })
+  it('rejects a file that is too small', () => {
+    const result = validateAudioFile({ size: 512, type: 'audio/wav', name: 'small.wav' })
+    expect(result.isValid).toBe(false)
+    expect(result.error).toContain('too small')
   })
 
-  describe('getWaveformQualityForZoom', () => {
-    it('should return low quality for low zoom levels', () => {
-      expect(getWaveformQualityForZoom(0)).toBe('low')
-      expect(getWaveformQualityForZoom(1)).toBe('low')
-      expect(getWaveformQualityForZoom(2)).toBe('low')
-    })
+  it('warns on unrecognized types but stays valid', () => {
+    const result = validateAudioFile({ size: 2048, type: 'application/octet-stream', name: 'mystery.bin' })
+    expect(result.isValid).toBe(true)
+    expect(result.warnings!.length).toBeGreaterThan(0)
+  })
+})
 
-    it('should return medium quality for medium zoom levels', () => {
-      expect(getWaveformQualityForZoom(3)).toBe('medium')
-      expect(getWaveformQualityForZoom(4)).toBe('medium')
-    })
+describe('getSampleRateForLame', () => {
+  it('maps sample rates to lamejs-supported rates', () => {
+    expect(getSampleRateForLame(48000)).toBe(44100)
+    expect(getSampleRateForLame(44100)).toBe(44100)
+    expect(getSampleRateForLame(22050)).toBe(22050)
+    expect(getSampleRateForLame(8000)).toBe(8000)
+  })
+})
 
-    it('should return high quality for high zoom levels', () => {
-      expect(getWaveformQualityForZoom(5)).toBe('high')
-      expect(getWaveformQualityForZoom(10)).toBe('high')
-    })
+describe('formatFileSize', () => {
+  it('formats byte counts', () => {
+    expect(formatFileSize(0)).toBe('0 Bytes')
+    expect(formatFileSize(1024)).toBe('1 KB')
+    expect(formatFileSize(1536)).toBe('1.5 KB')
+  })
+})
+
+describe('project persistence', () => {
+  const sampleProject: Project = {
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    name: 'Test Show',
+    tracks: [
+      {
+        id: 'track-1',
+        name: 'Voice 1',
+        kind: TrackKind.Voice,
+        volume: 1,
+        isMuted: false,
+        isSolo: false,
+        clips: [
+          { id: 'clip-1', fileId: 'file-1', trackId: 'track-1', startTime: 2, duration: 10, offset: 0 },
+        ],
+      },
+    ],
+    files: [
+      { id: 'file-1', name: 'intro.wav', path: 'C:\\audio\\intro.wav', type: 'audio/wav', duration: 12 },
+    ],
+  }
+
+  it('round-trips a project through serialize/parse', () => {
+    const json = serializeProject(sampleProject)
+    const parsed = parseProject(json)
+
+    expect(parsed.name).toBe('Test Show')
+    expect(parsed.tracks).toHaveLength(1)
+    expect(parsed.tracks[0].clips).toHaveLength(1)
+    expect(parsed.files[0].path).toBe('C:\\audio\\intro.wav')
   })
 
-  describe('getBitrateForQuality', () => {
-    it('should return correct MP3 bitrates', () => {
-      expect(getBitrateForQuality('cd', 'mp3')).toBe(128)
-      expect(getBitrateForQuality('professional', 'mp3')).toBe(192)
-      expect(getBitrateForQuality('high-end', 'mp3')).toBe(320)
-    })
+  it('never embeds audio buffers in the serialized project', () => {
+    const withBuffer: Project = {
+      ...sampleProject,
+      files: [{ ...sampleProject.files[0], buffer: createTestBuffer(44100) }],
+    }
+    const json = serializeProject(withBuffer)
+    expect(json).not.toContain('buffer')
+    expect(json.length).toBeLessThan(5000)
+  })
 
-    it('should return correct AAC bitrates', () => {
-      expect(getBitrateForQuality('cd', 'aac')).toBe(128)
-      expect(getBitrateForQuality('professional', 'aac')).toBe(192)
-      expect(getBitrateForQuality('high-end', 'aac')).toBe(256)
-    })
+  it('rejects non-JSON content', () => {
+    expect(() => parseProject('not json at all')).toThrow('not valid JSON')
+  })
+
+  it('rejects JSON that is not a project', () => {
+    expect(() => parseProject('{"foo": 1}')).toThrow('not a Runtime Radio project')
+  })
+
+  it('drops clips that reference missing files', () => {
+    const broken = {
+      ...JSON.parse(serializeProject(sampleProject)),
+      files: [],
+    }
+    const parsed = parseProject(JSON.stringify(broken))
+    expect(parsed.tracks[0].clips).toHaveLength(0)
+  })
+
+  it('clamps out-of-range volumes', () => {
+    const loud = JSON.parse(serializeProject(sampleProject))
+    loud.tracks[0].volume = 99
+    const parsed = parseProject(JSON.stringify(loud))
+    expect(parsed.tracks[0].volume).toBe(1)
   })
 })

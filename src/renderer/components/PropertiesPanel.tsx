@@ -1,69 +1,24 @@
-import React, { useState } from 'react';
-import { Project, Track, AudioClip, TrackKind, AudioPreset } from '@shared/types';
+import React from 'react';
+import { Project, Track, AudioClip, AudioFile, TrackKind, AudioPreset, SelectedItem } from '@shared/types';
 import { VOICE_PRESETS, MUSIC_PRESETS } from '../presets';
-import { getAudioEnhancementPreset } from '../services/geminiService';
-import { WandIcon, RepeatIcon } from './icons';
-import { AI_PRESET_NAME } from '../constants';
+import { RepeatIcon } from './icons';
+import { useAppStore } from '../store';
 
 
 interface PropertiesPanelProps {
-  selectedItem: { type: 'track' | 'clip' | 'file', id: string } | null;
+  selectedItem: SelectedItem;
   project: Project;
-  setProject: React.Dispatch<React.SetStateAction<Project | null>>;
 }
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project, setProject }) => {
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project }) => {
+  const updateTrack = useAppStore(s => s.updateTrack);
+  const updateClip = useAppStore(s => s.updateClip);
+  const saveToHistory = useAppStore(s => s.saveToHistory);
 
   const handlePresetChange = (trackId: string, presetName: string, availablePresets: AudioPreset[]) => {
-    let preset: AudioPreset | undefined;
-    if (presetName === AI_PRESET_NAME) {
-      // Don't do anything if they re-select the AI preset, it's already applied
-      const track = project.tracks.find(t => t.id === trackId);
-      if (track?.effects?.name === AI_PRESET_NAME) return;
-    }
-
-    preset = availablePresets.find(p => p.name === presetName);
-
-    setProject(p => {
-      if (!p) return null;
-      return {
-        ...p,
-        tracks: p.tracks.map(t => t.id === trackId ? { ...t, effects: preset } : t)
-      }
-    });
-  };
-
-  const handleAiEnhance = async (trackId: string) => {
-    const track = project.tracks.find(t => t.id === trackId);
-    if (!track) return;
-
-    setIsAiLoading(true);
-    setAiError(null);
-
-    // Generate a more descriptive prompt based on the track
-    const description = `A ${track.kind.toLowerCase()} recording for a podcast${track.kind === 'Voice' ? ' with potential background noise and room reverb that needs cleaning' : ' that may need enhancement for better podcast production'}.`;
-
-    try {
-      const preset = await getAudioEnhancementPreset(description);
-      if (preset) {
-        setProject(p => {
-          if (!p) return null;
-          return {
-            ...p,
-            tracks: p.tracks.map(t => t.id === trackId ? { ...t, effects: preset } : t)
-          }
-        });
-      } else {
-        throw new Error("AI did not return a valid preset.");
-      }
-    } catch (error) {
-      console.error("AI Enhancement failed:", error);
-      setAiError(error instanceof Error ? error.message : "An unknown error occurred.");
-    } finally {
-      setIsAiLoading(false);
-    }
+    const preset = availablePresets.find(p => p.name === presetName);
+    saveToHistory();
+    updateTrack(trackId, { effects: preset });
   };
 
   const renderTrackProperties = (trackId: string) => {
@@ -73,7 +28,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
     const isMusicTrack = track.kind === TrackKind.Music || track.kind === TrackKind.Background;
     const isVoiceTrack = track.kind === TrackKind.Voice;
 
-    let selectedPresetName = track.effects?.name || '';
+    const selectedPresetName = track.effects?.name || '';
     const isCustomPreset = selectedPresetName && ![...VOICE_PRESETS, ...MUSIC_PRESETS].some(p => p.name === selectedPresetName);
 
     return (
@@ -86,10 +41,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
             <label className="block text-sm font-medium text-gray-300">Volume</label>
             <input type="range" min="0" max="1" step="0.01" value={track.volume}
               className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
-              onChange={(e) => {
-                const newVolume = parseFloat(e.target.value);
-                setProject(p => p ? { ...p, tracks: p.tracks.map(t => t.id === trackId ? { ...t, volume: newVolume } : t) } : null)
-              }}
+              onChange={(e) => updateTrack(trackId, { volume: parseFloat(e.target.value) })}
             />
           </div>
         </div>
@@ -102,8 +54,8 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
                 checked={!!track.isDuckingEnabled}
                 className="h-5 w-5 text-purple-600 bg-gray-800 border-gray-600 rounded focus:ring-purple-500 focus:ring-offset-gray-800"
                 onChange={e => {
-                  const isEnabled = e.target.checked;
-                  setProject(p => p ? { ...p, tracks: p.tracks.map(t => t.id === trackId ? { ...t, isDuckingEnabled: isEnabled } : t) } : null);
+                  saveToHistory();
+                  updateTrack(trackId, { isDuckingEnabled: e.target.checked });
                 }}
               />
               <span className="text-gray-300">
@@ -132,59 +84,26 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
           </div>
         )}
 
-        {isVoiceTrack && (
-          <div className="mt-6 border-t border-gray-600 pt-4">
-            <h4 className="font-semibold text-purple-400 mb-2">AI Enhancement</h4>
-            <p className="text-xs text-gray-400 mb-3">Use AI to automatically clean up noise and reverb from this voice track.</p>
-            <button
-              onClick={() => handleAiEnhance(track.id)}
-              disabled={isAiLoading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-colors disabled:bg-purple-800 disabled:cursor-wait"
-            >
-              <WandIcon className="w-5 h-5" />
-              {isAiLoading ? 'Analyzing...' : 'AI-Powered Cleanup'}
-            </button>
-            {aiError && <p className="text-red-400 text-xs mt-2">Error: {aiError}</p>}
-          </div>
-        )}
-
       </>
     );
   };
 
   const renderClipProperties = (clipId: string) => {
     let clip: AudioClip | undefined;
-    let file: import('@shared/types').AudioFile | undefined;
+    let file: AudioFile | undefined;
     let trackOfClip: Track | undefined;
 
     for (const track of project.tracks) {
       const foundClip = track.clips.find(c => c.id === clipId);
       if (foundClip) {
         clip = foundClip;
-        file = project.files.find(f => f.id === clip.fileId);
+        file = project.files.find(f => f.id === foundClip.fileId);
         trackOfClip = track;
         break;
       }
     }
 
     if (!clip || !file || !trackOfClip) return <p className="text-gray-500">Clip not found.</p>;
-
-    const handleLoopToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const isLooped = e.target.checked;
-      setProject(p => {
-        if (!p) return null;
-        return {
-          ...p,
-          tracks: p.tracks.map(t => {
-            if (t.id !== trackOfClip?.id) return t;
-            return {
-              ...t,
-              clips: t.clips.map(c => c.id === clipId ? { ...c, isLooped } : c)
-            };
-          })
-        };
-      });
-    };
 
     return (
       <>
@@ -202,7 +121,10 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
               <input
                 type="checkbox"
                 checked={!!clip.isLooped}
-                onChange={handleLoopToggle}
+                onChange={(e) => {
+                  saveToHistory();
+                  updateClip(clipId, { isLooped: e.target.checked });
+                }}
                 className="h-5 w-5 text-purple-600 bg-gray-800 border-gray-600 rounded focus:ring-purple-500 focus:ring-offset-gray-800"
               />
               <span className="text-gray-300 flex items-center gap-2">
@@ -226,8 +148,18 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
         <h3 className="text-lg font-bold mb-2 break-all">{file.name}</h3>
         <p className="text-sm text-gray-400 mb-4">File Properties</p>
         <div className="space-y-2 text-sm">
-          <p><span className="font-semibold text-gray-300">File Type:</span> {file.type || 'audio/wav'}</p>
           <p><span className="font-semibold text-gray-300">Duration:</span> {file.duration.toFixed(2)}s</p>
+          {file.path && <p className="break-all"><span className="font-semibold text-gray-300">Path:</span> {file.path}</p>}
+          {!file.path && (
+            <p className="text-yellow-400 text-xs">
+              This file has no path on disk and will not reload after saving the project.
+            </p>
+          )}
+          {!file.buffer && (
+            <p className="text-red-400 text-xs">
+              Audio not loaded: the file was missing when the project was opened.
+            </p>
+          )}
         </div>
       </>
     );

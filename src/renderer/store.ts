@@ -1,159 +1,151 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { Project, Track, AudioFile, AudioClip, TrackKind, SelectedItem } from '@shared/types';
+import { INITIAL_ZOOM_LEVEL, createInitialTracks } from './constants';
 
-// History for undo/redo
-interface HistoryState {
-  past: Project[];
-  present: Project;
-  future: Project[];
-}
+const HISTORY_LIMIT = 50;
+
+/**
+ * Structural clone of a project for history snapshots.
+ * AudioBuffers are shared by reference: they are immutable for our purposes
+ * and a JSON deep clone would silently destroy them.
+ */
+const cloneProject = (p: Project): Project => ({
+  ...p,
+  tracks: p.tracks.map(t => ({ ...t, clips: t.clips.map(c => ({ ...c })) })),
+  files: p.files.map(f => ({ ...f })),
+});
+
+const newId = (prefix: string): string => `${prefix}-${crypto.randomUUID()}`;
 
 export interface AppState {
-  // Project state
   project: Project | null;
+  projectPath: string | null;
+  isDirty: boolean;
   selectedItem: SelectedItem;
+  zoomIndex: number;
+  history: { past: Project[]; future: Project[] };
 
-  // Playback state
-  isPlaying: boolean;
-  currentTime: number;
-  isBuffering: boolean;
-  isExporting: boolean;
+  // Project lifecycle
+  newProject: () => void;
+  loadProject: (project: Project, path: string | null) => void;
+  markSaved: (path: string) => void;
+
+  // Generic mutation (marks dirty, does NOT snapshot history)
+  updateProject: (updater: (project: Project) => Project) => void;
 
   // UI state
-  zoomIndex: number;
-  showWelcome: boolean;
-
-  // History for undo/redo
-  history: HistoryState;
-
-  // Actions
-  setProject: (project: Project | null) => void;
-  updateProject: (updater: (project: Project) => Project) => void;
   setSelectedItem: (item: SelectedItem) => void;
-
-  // Playback actions
-  setIsPlaying: (playing: boolean) => void;
-  setCurrentTime: (time: number) => void;
-  setIsBuffering: (buffering: boolean) => void;
-  setIsExporting: (exporting: boolean) => void;
-
-  // UI actions
   setZoomIndex: (index: number) => void;
-  setShowWelcome: (show: boolean) => void;
 
-  // History actions
+  // History
   saveToHistory: () => void;
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
 
-  // Project actions
+  // Domain actions (each snapshots history where appropriate)
   addTrack: (kind: TrackKind) => void;
   deleteTrack: (trackId: string) => void;
   updateTrack: (trackId: string, updates: Partial<Track>) => void;
   addClip: (trackId: string, clip: AudioClip) => void;
   updateClip: (clipId: string, updates: Partial<AudioClip>) => void;
-  deleteClip: (trackId: string, clipId: string) => void;
-  addFile: (file: AudioFile) => void;
-  updateFile: (fileId: string, updates: Partial<AudioFile>) => void;
+  deleteClip: (clipId: string) => void;
+  addFiles: (files: AudioFile[]) => void;
+  deleteFile: (fileId: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
   subscribeWithSelector((set, get) => ({
-    // Initial state
     project: null,
+    projectPath: null,
+    isDirty: false,
     selectedItem: null,
-    isPlaying: false,
-    currentTime: 0,
-    isBuffering: false,
-    isExporting: false,
-    zoomIndex: 4, // Default zoom level
-    showWelcome: true,
-    history: {
-      past: [],
-      present: null as any, // Will be set when project is loaded
-      future: []
-    },
+    zoomIndex: INITIAL_ZOOM_LEVEL,
+    history: { past: [], future: [] },
 
-    // Basic setters
-    setProject: (project) => set({ project, showWelcome: !project }),
-    updateProject: (updater) => {
-      const { project } = get();
-      if (!project) return;
-      const newProject = updater(project);
-      set({ project: newProject });
-    },
-    setSelectedItem: (selectedItem) => set({ selectedItem }),
-    setIsPlaying: (isPlaying) => set({ isPlaying }),
-    setCurrentTime: (currentTime) => set({ currentTime }),
-    setIsBuffering: (isBuffering) => set({ isBuffering }),
-    setIsExporting: (isExporting) => set({ isExporting }),
-    setZoomIndex: (zoomIndex) => set({ zoomIndex }),
-    setShowWelcome: (showWelcome) => set({ showWelcome }),
-
-    // History management
-    saveToHistory: () => {
-      const { project, history } = get();
-      if (!project) return;
-
+    newProject: () => {
       set({
-        history: {
-          past: [...history.past, history.present],
-          present: JSON.parse(JSON.stringify(project)), // Deep clone
-          future: []
-        }
+        project: {
+          name: 'Untitled Project',
+          tracks: createInitialTracks(),
+          files: [],
+        },
+        projectPath: null,
+        isDirty: false,
+        selectedItem: null,
+        history: { past: [], future: [] },
       });
     },
 
-    undo: () => {
-      const { history } = get();
-      if (history.past.length === 0) return;
-
-      const previous = history.past[history.past.length - 1];
-      const newPast = history.past.slice(0, -1);
-
+    loadProject: (project, path) => {
       set({
-        project: JSON.parse(JSON.stringify(previous)), // Deep clone
+        project,
+        projectPath: path,
+        isDirty: false,
+        selectedItem: null,
+        history: { past: [], future: [] },
+      });
+    },
+
+    markSaved: (path) => set({ projectPath: path, isDirty: false }),
+
+    updateProject: (updater) => {
+      const { project } = get();
+      if (!project) return;
+      set({ project: updater(project), isDirty: true });
+    },
+
+    setSelectedItem: (selectedItem) => set({ selectedItem }),
+    setZoomIndex: (zoomIndex) => set({ zoomIndex }),
+
+    saveToHistory: () => {
+      const { project, history } = get();
+      if (!project) return;
+      const past = [...history.past, cloneProject(project)].slice(-HISTORY_LIMIT);
+      set({ history: { past, future: [] } });
+    },
+
+    undo: () => {
+      const { project, history } = get();
+      if (!project || history.past.length === 0) return;
+      const previous = history.past[history.past.length - 1];
+      set({
+        project: previous,
+        isDirty: true,
         history: {
-          past: newPast,
-          present: previous,
-          future: [history.present, ...history.future]
-        }
+          past: history.past.slice(0, -1),
+          future: [cloneProject(project), ...history.future],
+        },
       });
     },
 
     redo: () => {
-      const { history } = get();
-      if (history.future.length === 0) return;
-
+      const { project, history } = get();
+      if (!project || history.future.length === 0) return;
       const next = history.future[0];
-      const newFuture = history.future.slice(1);
-
       set({
-        project: JSON.parse(JSON.stringify(next)), // Deep clone
+        project: next,
+        isDirty: true,
         history: {
-          past: [...history.past, history.present],
-          present: next,
-          future: newFuture
-        }
+          past: [...history.past, cloneProject(project)].slice(-HISTORY_LIMIT),
+          future: history.future.slice(1),
+        },
       });
     },
 
     canUndo: () => get().history.past.length > 0,
     canRedo: () => get().history.future.length > 0,
 
-    // Project actions
     addTrack: (kind) => {
-      const { project, saveToHistory } = get();
+      const { project, saveToHistory, updateProject } = get();
       if (!project) return;
-
       saveToHistory();
 
       const trackCount = project.tracks.filter(t => t.kind === kind).length;
       const newTrack: Track = {
-        id: `track-${Date.now()}`,
+        id: newId('track'),
         name: `${kind} ${trackCount + 1}`,
         kind,
         clips: [],
@@ -163,138 +155,122 @@ export const useAppStore = create<AppState>()(
         isDuckingEnabled: kind === TrackKind.Music || kind === TrackKind.Background,
       };
 
-      set({
-        project: {
-          ...project,
-          tracks: [...project.tracks, newTrack]
+      updateProject(p => {
+        const tracks = [...p.tracks];
+        if (kind === TrackKind.Voice) {
+          // Keep voice tracks grouped together.
+          let lastVoiceIndex = -1;
+          for (let i = tracks.length - 1; i >= 0; i--) {
+            if (tracks[i].kind === TrackKind.Voice) {
+              lastVoiceIndex = i;
+              break;
+            }
+          }
+          if (lastVoiceIndex !== -1) {
+            tracks.splice(lastVoiceIndex + 1, 0, newTrack);
+          } else {
+            tracks.push(newTrack);
+          }
+        } else {
+          tracks.push(newTrack);
         }
+        return { ...p, tracks };
       });
     },
 
     deleteTrack: (trackId) => {
-      const { project, saveToHistory, selectedItem } = get();
+      const { project, saveToHistory, updateProject, selectedItem } = get();
       if (!project) return;
-
       saveToHistory();
 
-      const newTracks = project.tracks.filter(t => t.id !== trackId);
-      const newSelectedItem = selectedItem?.type === 'track' && selectedItem.id === trackId
-        ? null
-        : selectedItem;
+      updateProject(p => ({ ...p, tracks: p.tracks.filter(t => t.id !== trackId) }));
 
-      set({
-        project: { ...project, tracks: newTracks },
-        selectedItem: newSelectedItem
-      });
+      if (selectedItem?.type === 'track' && selectedItem.id === trackId) {
+        set({ selectedItem: null });
+      }
     },
 
     updateTrack: (trackId, updates) => {
-      const { project } = get();
-      if (!project) return;
-
-      set({
-        project: {
-          ...project,
-          tracks: project.tracks.map(track =>
-            track.id === trackId ? { ...track, ...updates } : track
-          )
-        }
-      });
+      get().updateProject(p => ({
+        ...p,
+        tracks: p.tracks.map(track =>
+          track.id === trackId ? { ...track, ...updates } : track
+        ),
+      }));
     },
 
     addClip: (trackId, clip) => {
-      const { project, saveToHistory } = get();
-      if (!project) return;
-
+      const { saveToHistory, updateProject } = get();
       saveToHistory();
-
-      set({
-        project: {
-          ...project,
-          tracks: project.tracks.map(track =>
-            track.id === trackId
-              ? { ...track, clips: [...track.clips, clip] }
-              : track
-          )
-        }
-      });
+      updateProject(p => ({
+        ...p,
+        tracks: p.tracks.map(track =>
+          track.id === trackId
+            ? { ...track, clips: [...track.clips, clip] }
+            : track
+        ),
+      }));
     },
 
     updateClip: (clipId, updates) => {
-      const { project } = get();
-      if (!project) return;
-
-      set({
-        project: {
-          ...project,
-          tracks: project.tracks.map(track => ({
-            ...track,
-            clips: track.clips.map(clip =>
-              clip.id === clipId ? { ...clip, ...updates } : clip
-            )
-          }))
-        }
-      });
+      get().updateProject(p => ({
+        ...p,
+        tracks: p.tracks.map(track => ({
+          ...track,
+          clips: track.clips.map(clip =>
+            clip.id === clipId ? { ...clip, ...updates } : clip
+          ),
+        })),
+      }));
     },
 
-    deleteClip: (trackId, clipId) => {
-      const { project, saveToHistory } = get();
-      if (!project) return;
-
+    deleteClip: (clipId) => {
+      const { saveToHistory, updateProject, selectedItem } = get();
       saveToHistory();
-
-      set({
-        project: {
-          ...project,
-          tracks: project.tracks.map(track =>
-            track.id === trackId
-              ? { ...track, clips: track.clips.filter(c => c.id !== clipId) }
-              : track
-          )
-        }
-      });
+      updateProject(p => ({
+        ...p,
+        tracks: p.tracks.map(track => ({
+          ...track,
+          clips: track.clips.filter(c => c.id !== clipId),
+        })),
+      }));
+      if (selectedItem?.type === 'clip' && selectedItem.id === clipId) {
+        set({ selectedItem: null });
+      }
     },
 
-    addFile: (file) => {
-      const { project } = get();
-      if (!project) return;
-
-      set({
-        project: {
-          ...project,
-          files: [...project.files, file]
-        }
-      });
+    addFiles: (files) => {
+      if (files.length === 0) return;
+      get().updateProject(p => ({ ...p, files: [...p.files, ...files] }));
     },
 
-    updateFile: (fileId, updates) => {
-      const { project } = get();
-      if (!project) return;
+    deleteFile: (fileId) => {
+      const { saveToHistory, updateProject, selectedItem } = get();
+      saveToHistory();
+      updateProject(p => ({
+        ...p,
+        files: p.files.filter(f => f.id !== fileId),
+        tracks: p.tracks.map(track => ({
+          ...track,
+          clips: track.clips.filter(clip => clip.fileId !== fileId),
+        })),
+      }));
 
-      set({
-        project: {
-          ...project,
-          files: project.files.map(file =>
-            file.id === fileId ? { ...file, ...updates } : file
-          )
-        }
-      });
-    }
+      const { project } = get();
+      if (selectedItem?.type === 'file' && selectedItem.id === fileId) {
+        set({ selectedItem: null });
+      } else if (selectedItem?.type === 'clip' && project) {
+        const clipExists = project.tracks.some(t => t.clips.some(c => c.id === selectedItem.id));
+        if (!clipExists) set({ selectedItem: null });
+      }
+    },
   }))
 );
 
-// Selectors for computed values
-export const useProject = () => useAppStore((state) => state.project);
-export const useSelectedItem = () => useAppStore((state) => state.selectedItem);
-export const usePlaybackState = () => useAppStore((state) => ({
-  isPlaying: state.isPlaying,
-  currentTime: state.currentTime,
-  isBuffering: state.isBuffering,
-  isExporting: state.isExporting
-}));
-export const useHistory = () => useAppStore((state) => ({
-  canUndo: state.canUndo(),
-  canRedo: state.canRedo(),
-  undo: state.undo,
-  redo: state.redo
-}));
+export { newId };
+
+// Keep the main process informed so it can warn before closing with unsaved changes.
+useAppStore.subscribe(
+  state => state.isDirty,
+  dirty => window.electron?.setDirty(dirty)
+);

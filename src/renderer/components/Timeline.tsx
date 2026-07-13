@@ -1,9 +1,28 @@
-import React, { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { Project, Track, AudioFile, TrackKind, AudioClip, TimelineHandle } from '@shared/types';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Project, Track, TrackKind, SelectedItem } from '@shared/types';
 import { TRACK_META, ZOOM_LEVELS } from '../constants';
 import { PlusCircleIcon, CloseIcon, ZoomInIcon, ZoomOutIcon } from './icons';
+import { useDroppable } from '@dnd-kit/core';
 import TimelineRuler from './TimelineRuler';
 import Clip from './Clip';
+
+const DroppableTrack: React.FC<{ track: Track; children: React.ReactNode; onContextMenu: (e: React.MouseEvent) => void }> = ({ track, children, onContextMenu }) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `track-${track.id}`,
+    data: { type: 'track', track }
+  });
+
+  return (
+    <div
+      id={`track-${track.id}`}
+      ref={setNodeRef}
+      className={`h-24 bg-gray-900/50 rounded-b-md relative ${isOver ? 'ring-2 ring-purple-500 ring-inset' : ''}`}
+      onContextMenu={onContextMenu}
+    >
+      {children}
+    </div>
+  );
+};
 
 type Interaction = {
   type: 'move' | 'resize-left' | 'resize-right';
@@ -20,11 +39,14 @@ type Interaction = {
 
 interface TimelineProps {
   project: Project;
-  setProject: React.Dispatch<React.SetStateAction<Project | null>>;
-  selectedItem: { type: 'track' | 'clip' | 'file', id: string } | null;
-  onSelectItem: (item: { type: 'track' | 'clip' | 'file', id: string } | null) => void;
+  updateProject: (updater: (project: Project) => Project) => void;
+  /** Called once at the start of a drag/resize gesture so it becomes a single undo step. */
+  onInteractionStart: () => void;
+  selectedItem: SelectedItem;
+  onSelectItem: (item: SelectedItem) => void;
   onAddTrack: (kind: TrackKind) => void;
   onDeleteTrack: (trackId: string) => void;
+  onDeleteClip: (clipId: string) => void;
   currentTime: number;
   onSeek: (time: number) => void;
   isPlaying: boolean;
@@ -35,81 +57,11 @@ interface TimelineProps {
   onPasteClip?: (trackId: string, pasteTime: number) => void;
 }
 
-const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProject, selectedItem, onSelectItem, onAddTrack, onDeleteTrack, currentTime, onSeek, isPlaying, pixelsPerSecond, zoomIndex, onZoomChange, onCopyClip, onPasteClip }, ref) => {
-  const [draggedOverTrack, setDraggedOverTrack] = useState<string | null>(null);
+const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteractionStart, selectedItem, onSelectItem, onAddTrack, onDeleteTrack, onDeleteClip, currentTime, onSeek, isPlaying, pixelsPerSecond, zoomIndex, onZoomChange, onCopyClip, onPasteClip }) => {
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const [interaction, setInteraction] = useState<Interaction | null>(null);
 
-  useImperativeHandle(ref, () => ({
-    scrollToTime: (time: number) => {
-      const container = timelineContainerRef.current;
-      if (!container || !isPlaying) return;
-
-      const scrollLeft = container.scrollLeft;
-      const containerWidth = container.clientWidth;
-      const playheadPos = time * pixelsPerSecond;
-
-      // Center the playhead
-      const targetScrollLeft = playheadPos - containerWidth / 2;
-
-      // Only auto-scroll if the playhead is outside the middle 60% of the view
-      const followMargin = containerWidth * 0.2;
-      if (playheadPos < scrollLeft + followMargin || playheadPos > scrollLeft + containerWidth - followMargin) {
-        container.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
-      }
-    }
-  }));
-
-
   const totalDuration = Math.max(60, ...project.tracks.flatMap(t => t.clips.map(c => c.startTime + c.duration)));
-
-  const handleDropOnTrack = (e: React.DragEvent<HTMLDivElement>, track: Track) => {
-    e.preventDefault();
-    setDraggedOverTrack(null);
-    try {
-      const dragData = e.dataTransfer.getData('application/runtime-audio-file');
-      if (!dragData) return; // Prevent parsing empty strings if other items are dragged
-
-      const fileData: { id: string } = JSON.parse(dragData);
-      if (!fileData || !fileData.id) return;
-
-      const file = project.files.find(f => f.id === fileData.id);
-      if (!file) return;
-
-      const trackElement = e.currentTarget;
-      const rect = trackElement.getBoundingClientRect();
-      const scrollLeft = timelineContainerRef.current?.scrollLeft || 0;
-      const dropX = e.clientX - rect.left + scrollLeft;
-
-      const startTime = Math.max(0, dropX / pixelsPerSecond);
-
-      setProject(p => {
-        if (!p) return null;
-
-        const newClip: AudioClip = {
-          id: `clip-${Date.now()}`,
-          fileId: file.id,
-          trackId: track.id,
-          startTime: startTime,
-          duration: file.duration,
-          offset: 0,
-          isLooped: false,
-        };
-
-        const newTracks = p.tracks.map(t => {
-          if (t.id === track.id) {
-            return { ...t, clips: [...t.clips, newClip] };
-          }
-          return t;
-        });
-
-        return { ...p, tracks: newTracks };
-      });
-
-    } catch (error) {
-      console.error("Failed to handle drop:", error);
-    }
-  };
 
   const getFileForClip = useCallback((clipId: string) => {
     const clip = project.tracks.flatMap(t => t.clips).find(c => c.id === clipId);
@@ -127,6 +79,7 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
     if (!track || !clip) return;
 
     onSelectItem({ type: 'clip', id: clipId });
+    onInteractionStart();
     setInteraction({
       type,
       clipId,
@@ -137,29 +90,6 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
       initialOffset: clip.offset,
     });
   };
-
-  const handleDeleteClip = useCallback((clipId: string) => {
-    setProject(p => {
-      if (!p) return null;
-
-      const newTracks = p.tracks.map(track => {
-        const clipIndex = track.clips.findIndex(c => c.id === clipId);
-        if (clipIndex !== -1) {
-          const newClips = [...track.clips];
-          newClips.splice(clipIndex, 1);
-          return { ...track, clips: newClips };
-        }
-        return track;
-      });
-
-      return { ...p, tracks: newTracks };
-    });
-
-    // Deselect if the deleted clip was selected
-    if (selectedItem?.type === 'clip' && selectedItem.id === clipId) {
-      onSelectItem(null);
-    }
-  }, [setProject, selectedItem, onSelectItem]);
 
   const handlePlayheadInteraction = (e: React.MouseEvent) => {
     if (isPlaying) return;
@@ -187,8 +117,7 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
       const deltaX = e.clientX - initialX;
       const deltaTime = deltaX / pixelsPerSecond;
 
-      setProject(p => {
-        if (!p) return p;
+      updateProject(p => {
         const newTracks = p.tracks.map(track => {
           const clipIndex = track.clips.findIndex(c => c.id === clipId);
           if (clipIndex === -1) return track;
@@ -197,7 +126,7 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
           const file = getFileForClip(clipId);
           if (!file) return track;
 
-          let newClip = { ...clip };
+          const newClip = { ...clip };
 
           if (type === 'move') {
             newClip.startTime = Math.max(0, initialStartTime + deltaTime);
@@ -239,7 +168,7 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [interaction, setProject, getFileForClip, onSeek, pixelsPerSecond]);
+  }, [interaction, updateProject, getFileForClip, onSeek, pixelsPerSecond]);
 
 
   return (
@@ -252,7 +181,7 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
           <div
             key={track.id}
             className={`
-              mb-2 rounded-lg border 
+              mb-2 rounded-lg border
               ${selectedItem?.type === 'track' && selectedItem.id === track.id ? 'border-purple-500 bg-purple-900/20' : 'border-transparent'}
             `}
           >
@@ -272,16 +201,14 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
                 <CloseIcon className="w-4 h-4" />
               </button>
             </div>
-            <div
-              className={`h-24 bg-gray-900/50 rounded-b-md relative ${draggedOverTrack === track.id ? 'ring-2 ring-purple-500 ring-inset' : ''}`}
-              onDragOver={(e) => { e.preventDefault(); setDraggedOverTrack(track.id); }}
-              onDragLeave={() => setDraggedOverTrack(null)}
-              onDrop={(e) => handleDropOnTrack(e, track)}
+            <DroppableTrack
+              track={track}
               onContextMenu={(e) => {
                 e.preventDefault();
                 // Show paste option if clipboard has content
                 if (onPasteClip) {
-                  const pasteTime = (e.clientX - e.currentTarget.getBoundingClientRect().left + timelineContainerRef.current?.scrollLeft || 0) / pixelsPerSecond;
+                  const scrollLeft = timelineContainerRef.current?.scrollLeft ?? 0;
+                  const pasteTime = Math.max(0, (e.clientX - e.currentTarget.getBoundingClientRect().left + scrollLeft) / pixelsPerSecond);
                   onPasteClip(track.id, pasteTime);
                 }
               }}
@@ -296,13 +223,13 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
                     pixelsPerSecond={pixelsPerSecond}
                     isSelected={selectedItem?.type === 'clip' && selectedItem.id === clip.id}
                     onSelect={onSelectItem}
-                    onDelete={handleDeleteClip}
+                    onDelete={onDeleteClip}
                     onCopy={onCopyClip}
                     onInteractionStart={onClipInteractionStart}
                   />
                 );
               })}
-            </div>
+            </DroppableTrack>
           </div>
         ))}
         <div
@@ -330,8 +257,8 @@ const Timeline = forwardRef<TimelineHandle, TimelineProps>(({ project, setProjec
           </button>
         </div>
       </div>
-    </div>
+    </div >
   );
-});
+};
 
 export default Timeline;

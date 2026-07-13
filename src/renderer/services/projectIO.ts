@@ -3,6 +3,7 @@
 // never embedded in the project JSON.
 
 import { Project, Track, AudioFile, AudioClip, TrackKind, PROJECT_SCHEMA_VERSION } from '@shared/types';
+import { t } from '../i18n';
 
 export interface LoadResult {
   project: Project;
@@ -10,7 +11,7 @@ export interface LoadResult {
   missingFiles: string[];
 }
 
-const PROJECT_FILTERS = [{ name: 'Project Files', extensions: ['json'] }];
+const projectFilters = () => [{ name: t('dialog.projectFiles'), extensions: ['json'] }];
 
 export function requireBridge() {
   if (!window.electron) {
@@ -142,22 +143,29 @@ export async function hydrateProjectAudio(
   return { project: { ...project, files }, missingFiles };
 }
 
-export async function openProjectFromDisk(
+/** Load and hydrate a project from a known path (recents, recovery). */
+export async function openProjectByPath(
+  path: string,
   decode: (data: ArrayBuffer) => Promise<AudioBuffer>
-): Promise<LoadResult | null> {
+): Promise<LoadResult> {
   const bridge = requireBridge();
-  const result = await bridge.openFileDialog({
-    title: 'Open Project',
-    filters: PROJECT_FILTERS,
-  });
-  if (result.canceled || result.filePaths.length === 0) return null;
-
-  const path = result.filePaths[0];
   const data = await bridge.readFile(path);
   const json = new TextDecoder().decode(data);
   const parsed = parseProject(json);
   const { project, missingFiles } = await hydrateProjectAudio(parsed, decode);
   return { project, path, missingFiles };
+}
+
+export async function openProjectFromDisk(
+  decode: (data: ArrayBuffer) => Promise<AudioBuffer>
+): Promise<LoadResult | null> {
+  const bridge = requireBridge();
+  const result = await bridge.openFileDialog({
+    title: t('dialog.openProject'),
+    filters: projectFilters(),
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return openProjectByPath(result.filePaths[0], decode);
 }
 
 /**
@@ -174,9 +182,9 @@ export async function saveProjectToDisk(
   let targetPath = currentPath;
   if (!targetPath || saveAs) {
     const result = await bridge.saveFileDialog({
-      title: 'Save Project',
+      title: t('dialog.saveProject'),
       defaultPath: `${project.name.replace(/[\\/:*?"<>|\s]+/g, '_')}.json`,
-      filters: PROJECT_FILTERS,
+      filters: projectFilters(),
     });
     if (result.canceled || !result.filePath) return null;
     targetPath = result.filePath;

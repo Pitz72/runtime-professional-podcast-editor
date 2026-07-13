@@ -5,6 +5,9 @@ import { PlusCircleIcon, CloseIcon, ZoomInIcon, ZoomOutIcon } from './icons';
 import { useDroppable } from '@dnd-kit/core';
 import TimelineRuler from './TimelineRuler';
 import Clip from './Clip';
+import ContextMenu, { ContextMenuState } from './ContextMenu';
+import { useT } from '../i18n';
+import { getSnapTargets, snapTime, clampToFreeSpace, maxEndBeforeNextClip, minStartAfterPreviousClip, SNAP_THRESHOLD_PX } from '../services/timelineUtils';
 
 const DroppableTrack: React.FC<{ track: Track; children: React.ReactNode; onContextMenu: (e: React.MouseEvent) => void }> = ({ track, children, onContextMenu }) => {
   const { isOver, setNodeRef } = useDroppable({
@@ -80,21 +83,25 @@ interface TimelineProps {
   onDeleteClip: (clipId: string) => void;
   onSeek: (time: number) => void;
   onTimeUpdate: (callback: (time: number) => void) => () => void;
+  getCurrentTime: () => number;
   isPlaying: boolean;
   pixelsPerSecond: number;
   zoomIndex: number;
   onZoomChange: (index: number) => void;
-  onCopyClip?: (clipId: string) => void;
-  onPasteClip?: (trackId: string, pasteTime: number) => void;
+  hasClipboardContent: boolean;
+  onCopyClip: (clipId: string) => void;
+  onPasteClip: (trackId: string, pasteTime: number) => void;
 }
 
-const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteractionStart, selectedItem, onSelectItem, onAddTrack, onDeleteTrack, onDeleteClip, onSeek, onTimeUpdate, isPlaying, pixelsPerSecond, zoomIndex, onZoomChange, onCopyClip, onPasteClip }) => {
+const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteractionStart, selectedItem, onSelectItem, onAddTrack, onDeleteTrack, onDeleteClip, onSeek, onTimeUpdate, getCurrentTime, isPlaying, pixelsPerSecond, zoomIndex, onZoomChange, hasClipboardContent, onCopyClip, onPasteClip }) => {
+  const t = useT();
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   // The scrolled content area: fresh getBoundingClientRect() on this element
   // already accounts for scroll AND container padding, so position math
   // never needs manual scrollLeft/padding corrections.
   const contentRef = useRef<HTMLDivElement>(null);
   const [interaction, setInteraction] = useState<Interaction | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const totalDuration = Math.max(60, ...project.tracks.flatMap(t => t.clips.map(c => c.startTime + c.duration)));
 
@@ -133,6 +140,38 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
     setInteraction({ type: 'seek', initialX: e.clientX });
   }
 
+  const openTrackContextMenu = (track: Track, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const trackRect = e.currentTarget.getBoundingClientRect();
+    const pasteTime = Math.max(0, (e.clientX - trackRect.left) / pixelsPerSecond);
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: t('timeline.pasteHere'),
+          disabled: !hasClipboardContent,
+          onClick: () => onPasteClip(track.id, pasteTime),
+        },
+      ],
+    });
+  };
+
+  const openClipContextMenu = (clipId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectItem({ type: 'clip', id: clipId });
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: t('timeline.copyClip'), onClick: () => onCopyClip(clipId) },
+        { label: t('timeline.deleteClip'), danger: true, onClick: () => onDeleteClip(clipId) },
+      ],
+    });
+  };
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!interaction) return;
@@ -149,7 +188,12 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
       const deltaX = e.clientX - initialX;
       const deltaTime = deltaX / pixelsPerSecond;
 
+      // Hold Alt to bypass snapping (standard DAW behavior).
+      const snapThreshold = e.altKey ? 0 : SNAP_THRESHOLD_PX / pixelsPerSecond;
+
       updateProject(p => {
+        const snapTargets = getSnapTargets(p, clipId, getCurrentTime());
+
         const newTracks = p.tracks.map(track => {
           const clipIndex = track.clips.findIndex(c => c.id === clipId);
           if (clipIndex === -1) return track;
@@ -158,25 +202,44 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
           const file = getFileForClip(clipId);
           if (!file) return track;
 
+          const otherClips = track.clips.filter(c => c.id !== clipId);
           const newClip = { ...clip };
 
           if (type === 'move') {
-            newClip.startTime = Math.max(0, initialStartTime + deltaTime);
+            let desired = Math.max(0, initialStartTime + deltaTime);
+            if (snapThreshold > 0) {
+              // Snap whichever edge (start or end) is closer to a target.
+              const snappedStart = snapTime(desired, snapTargets, snapThreshold);
+              const snappedByEnd = snapTime(desired + initialDuration, snapTargets, snapThreshold) - initialDuration;
+              desired = Math.abs(snappedStart - desired) <= Math.abs(snappedByEnd - desired)
+                ? snappedStart
+                : Math.max(0, snappedByEnd);
+            }
+            newClip.startTime = clampToFreeSpace(otherClips, desired, clip.duration);
           } else if (type === 'resize-right') {
-            const newDuration = Math.max(0.1, initialDuration + deltaTime);
-            newClip.duration = Math.min(newDuration, file.duration - clip.offset);
+            let desiredEnd = initialStartTime + Math.max(0.1, initialDuration + deltaTime);
+            if (snapThreshold > 0) {
+              desiredEnd = snapTime(desiredEnd, snapTargets, snapThreshold);
+            }
+            const maxByFile = clip.startTime + (file.duration - clip.offset);
+            const maxByNeighbor = maxEndBeforeNextClip(otherClips, clip.startTime);
+            const end = Math.min(desiredEnd, maxByFile, maxByNeighbor);
+            newClip.duration = Math.max(0.1, end - clip.startTime);
           } else if (type === 'resize-left') {
-            // Can't move left past the start of the audio file (where offset would be < 0).
-            const minTimeDelta = -initialOffset;
-            // Can't move right past the end of the clip (where duration would be < 0.1s).
-            const maxTimeDelta = initialDuration - 0.1;
+            let desiredStart = initialStartTime + deltaTime;
+            if (snapThreshold > 0) {
+              desiredStart = snapTime(desiredStart, snapTargets, snapThreshold);
+            }
+            const clipEnd = initialStartTime + initialDuration;
+            const minByFile = initialStartTime - initialOffset; // offset can't go below 0
+            const minByNeighbor = minStartAfterPreviousClip(otherClips, clipEnd);
+            const maxStart = clipEnd - 0.1;
+            const start = Math.min(Math.max(desiredStart, minByFile, minByNeighbor, 0), maxStart);
 
-            // Clamp the mouse movement delta to our calculated bounds.
-            const clampedDeltaTime = Math.max(minTimeDelta, Math.min(deltaTime, maxTimeDelta));
-
-            newClip.startTime = initialStartTime + clampedDeltaTime;
-            newClip.offset = initialOffset + clampedDeltaTime;
-            newClip.duration = initialDuration - clampedDeltaTime;
+            const delta = start - initialStartTime;
+            newClip.startTime = start;
+            newClip.offset = initialOffset + delta;
+            newClip.duration = initialDuration - delta;
           }
 
           const newClips = [...track.clips];
@@ -200,7 +263,7 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [interaction, updateProject, getFileForClip, onSeek, pixelsPerSecond]);
+  }, [interaction, updateProject, getFileForClip, onSeek, pixelsPerSecond, getCurrentTime]);
 
 
   return (
@@ -228,23 +291,14 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
                   onDeleteTrack(track.id)
                 }}
                 className="p-1 text-gray-400 hover:text-white hover:bg-red-500 rounded"
-                aria-label={`Delete track ${track.name}`}
+                aria-label={t('timeline.deleteTrack', { name: track.name })}
               >
                 <CloseIcon className="w-4 h-4" />
               </button>
             </div>
             <DroppableTrack
               track={track}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                if (onPasteClip) {
-                  // The track rect is queried at event time: it already reflects
-                  // scroll position, no manual scrollLeft correction needed.
-                  const trackRect = e.currentTarget.getBoundingClientRect();
-                  const pasteTime = Math.max(0, (e.clientX - trackRect.left) / pixelsPerSecond);
-                  onPasteClip(track.id, pasteTime);
-                }
-              }}
+              onContextMenu={(e) => openTrackContextMenu(track, e)}
             >
               {track.clips.map(clip => {
                 const file = getFileForClip(clip.id);
@@ -256,8 +310,7 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
                     pixelsPerSecond={pixelsPerSecond}
                     isSelected={selectedItem?.type === 'clip' && selectedItem.id === clip.id}
                     onSelect={onSelectItem}
-                    onDelete={onDeleteClip}
-                    onCopy={onCopyClip}
+                    onContextMenu={openClipContextMenu}
                     onInteractionStart={onClipInteractionStart}
                   />
                 );
@@ -273,21 +326,23 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
       </div>
       <div className="pt-4 flex justify-center gap-4 items-center">
         <button onClick={() => onAddTrack(TrackKind.Voice)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-md text-sm">
-          <PlusCircleIcon className="w-4 h-4" /> Add Voice Track
+          <PlusCircleIcon className="w-4 h-4" /> {t('timeline.addVoiceTrack')}
         </button>
         <button onClick={() => onAddTrack(TrackKind.Music)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-md text-sm">
-          <PlusCircleIcon className="w-4 h-4" /> Add Music Track
+          <PlusCircleIcon className="w-4 h-4" /> {t('timeline.addMusicTrack')}
         </button>
         <div className="flex items-center gap-2">
           <button onClick={() => onZoomChange(Math.max(0, zoomIndex - 1))} disabled={zoomIndex === 0} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded-md disabled:opacity-50">
             <ZoomOutIcon className="w-4 h-4" />
           </button>
-          <span className="text-xs text-gray-400 w-12 text-center">Zoom</span>
+          <span className="text-xs text-gray-400 w-12 text-center">{t('timeline.zoom')}</span>
           <button onClick={() => onZoomChange(Math.min(ZOOM_LEVELS.length - 1, zoomIndex + 1))} disabled={zoomIndex === ZOOM_LEVELS.length - 1} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded-md disabled:opacity-50">
             <ZoomInIcon className="w-4 h-4" />
           </button>
         </div>
       </div>
+
+      {contextMenu && <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />}
     </div >
   );
 };

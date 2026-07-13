@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 const MENU_CHANNELS = [
     'menu:new-project',
     'menu:open-project',
+    'menu:open-recent',
     'menu:save-project',
     'menu:save-project-as',
     'menu:export-audio',
@@ -36,12 +37,26 @@ contextBridge.exposeInMainWorld('electron', {
     // Unsaved-changes flag for the close-confirmation dialog.
     setDirty: (dirty: boolean) => ipcRenderer.send('project:set-dirty', dirty),
 
+    // UI language, mirrored to the native menu and dialogs.
+    setLocale: (locale: 'it' | 'en') => ipcRenderer.send('settings:set-locale', locale),
+
+    // Recent projects
+    getRecentProjects: (): Promise<string[]> => ipcRenderer.invoke('recents:get'),
+    addRecentProject: (projectPath: string): Promise<boolean> => ipcRenderer.invoke('recents:add', projectPath),
+
+    // Autosave recovery slot
+    autosaveWrite: (payload: { projectPath: string | null; data: string }): Promise<boolean> =>
+        ipcRenderer.invoke('autosave:write', payload),
+    autosaveRead: (): Promise<{ savedAt: number; projectPath: string | null; data: string } | null> =>
+        ipcRenderer.invoke('autosave:read'),
+    autosaveClear: (): Promise<boolean> => ipcRenderer.invoke('autosave:clear'),
+
     // Menu events. Returns an unsubscribe function.
-    onMenuEvent: (channel: string, callback: () => void): (() => void) => {
+    onMenuEvent: (channel: string, callback: (...args: unknown[]) => void): (() => void) => {
         if (!(MENU_CHANNELS as readonly string[]).includes(channel)) {
             return () => undefined;
         }
-        const listener = () => callback();
+        const listener = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args);
         ipcRenderer.on(channel, listener);
         return () => ipcRenderer.removeListener(channel, listener);
     },

@@ -11,6 +11,7 @@ import {
   RawAudio,
 } from '../src/renderer/services/encoders'
 import { computePeaks } from '../src/renderer/hooks/useWaveformData'
+import { snapTime, clampToFreeSpace, maxEndBeforeNextClip, minStartAfterPreviousClip } from '../src/renderer/services/timelineUtils'
 import { parseProject, serializeProject } from '../src/renderer/services/projectIO'
 import { Project, TrackKind, PROJECT_SCHEMA_VERSION } from '../src/shared/types'
 
@@ -109,6 +110,73 @@ describe('computePeaks', () => {
     const peaks = computePeaks(buffer, 10, 1, 5)
     expect(peaks).toHaveLength(5)
     expect(Math.max(...peaks)).toBe(0)
+  })
+})
+
+describe('snapTime', () => {
+  it('snaps to the nearest target within the threshold', () => {
+    expect(snapTime(10.05, [10, 20], 0.2, 0)).toBe(10)
+    expect(snapTime(19.9, [10, 20], 0.2, 0)).toBe(20)
+  })
+
+  it('leaves the time alone outside the threshold', () => {
+    expect(snapTime(15, [10, 20], 0.2, 0)).toBe(15)
+  })
+
+  it('snaps to the grid when closer than any target', () => {
+    expect(snapTime(6.97, [20], 0.1, 1)).toBe(7)
+  })
+
+  it('never returns negative times', () => {
+    expect(snapTime(-0.5, [], 0.2, 1)).toBe(0)
+  })
+})
+
+describe('clampToFreeSpace', () => {
+  const clips = [
+    { startTime: 10, duration: 5 }, // occupies 10..15
+    { startTime: 20, duration: 5 }, // occupies 20..25
+  ]
+
+  it('keeps a position that already fits', () => {
+    expect(clampToFreeSpace(clips, 2, 5)).toBe(2)
+    expect(clampToFreeSpace(clips, 15, 5)).toBe(15)
+  })
+
+  it('pushes an overlapping clip into the nearest gap', () => {
+    // Desired 12 overlaps 10..15; the 15..20 gap fits a 5s clip.
+    const result = clampToFreeSpace(clips, 12, 5)
+    expect(result === 15 || result === 5).toBe(true)
+    // Verify no overlap with either clip
+    expect(result + 5 <= 20 || result >= 25).toBe(true)
+  })
+
+  it('skips gaps that are too small', () => {
+    // Gap 15..20 is 5s wide: a 6s clip cannot fit there.
+    const result = clampToFreeSpace(clips, 16, 6)
+    expect(result).toBe(25) // after the last clip
+  })
+
+  it('appends after the last clip on a fully packed track', () => {
+    const packed = [{ startTime: 0, duration: 100 }]
+    expect(clampToFreeSpace(packed, 50, 10)).toBe(100)
+  })
+})
+
+describe('resize limits', () => {
+  const clips = [
+    { startTime: 0, duration: 5 },   // 0..5
+    { startTime: 20, duration: 5 },  // 20..25
+  ]
+
+  it('maxEndBeforeNextClip stops at the next clip', () => {
+    expect(maxEndBeforeNextClip(clips, 10)).toBe(20)
+    expect(maxEndBeforeNextClip(clips, 30)).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  it('minStartAfterPreviousClip stops at the previous clip end', () => {
+    expect(minStartAfterPreviousClip(clips, 15)).toBe(5)
+    expect(minStartAfterPreviousClip(clips, 3)).toBe(0)
   })
 })
 

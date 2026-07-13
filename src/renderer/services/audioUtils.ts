@@ -39,7 +39,18 @@ export const buildAudioGraph = (
         masterBus.connect(context.destination);
     }
 
-    const sources: { source: AudioBufferSourceNode, clip: { id: string; fileId: string; startTime: number; duration: number; offset: number } }[] = [];
+    const sources: {
+        source: AudioBufferSourceNode,
+        clip: {
+            id: string;
+            fileId: string;
+            startTime: number;
+            duration: number;
+            offset: number;
+            /** Set on looped clips: length of one loop iteration in seconds. */
+            loopSegmentDuration?: number;
+        }
+    }[] = [];
     const voiceClips = project.tracks
         .filter(t => t.kind === TrackKind.Voice)
         .flatMap(t => t.clips);
@@ -130,15 +141,23 @@ export const buildAudioGraph = (
             const file = project.files.find(f => f.id === clip.fileId);
             if (file?.buffer) {
                 if ((track.kind === TrackKind.Music || track.kind === TrackKind.Background) && clip.isLooped && clip.duration > 0) {
-                    let currentStartTime = clip.startTime;
-                    while (currentStartTime < totalDuration) {
-                        const source = context.createBufferSource();
-                        source.buffer = file.buffer;
-                        source.connect(trackHead);
-                        const repeatedClip = { ...clip, id: `${clip.id}-loop-${currentStartTime}`, startTime: currentStartTime };
-                        sources.push({ source, clip: repeatedClip });
-                        currentStartTime += clip.duration;
-                    }
+                    // Native looping: ONE source node with a loop region, instead
+                    // of hundreds of stacked nodes for long projects.
+                    const source = context.createBufferSource();
+                    source.buffer = file.buffer;
+                    source.loop = true;
+                    source.loopStart = clip.offset;
+                    source.loopEnd = Math.min(clip.offset + clip.duration, file.buffer.duration);
+                    source.connect(trackHead);
+                    sources.push({
+                        source,
+                        clip: {
+                            ...clip,
+                            // The looped clip occupies the timeline until the project ends.
+                            duration: Math.max(0, totalDuration - clip.startTime),
+                            loopSegmentDuration: clip.duration,
+                        },
+                    });
                 } else {
                     const source = context.createBufferSource();
                     source.buffer = file.buffer;

@@ -3,6 +3,7 @@ import { PlayIcon, PauseIcon, StopIcon, SaveIcon } from './icons';
 import { CompressorSettings } from '@shared/types';
 import { MASTERING_PRESETS } from '../presets';
 import { ExportFormat } from '../services/audioUtils';
+import { useT } from '../i18n';
 
 interface TransportControlsProps {
   isPlaying: boolean;
@@ -29,8 +30,9 @@ const TransportControls: React.FC<TransportControlsProps> = ({
   exportFormat,
   onExportFormatChange
 }) => {
+  const t = useT();
   const isBusy = isExporting;
-  const exportButtonText = isExporting ? 'Exporting...' : 'Export';
+  const exportButtonText = isExporting ? t('transport.exporting') : t('transport.export');
 
   const handleMasteringSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const preset = MASTERING_PRESETS.find(p => p.name === e.target.value);
@@ -48,7 +50,7 @@ const TransportControls: React.FC<TransportControlsProps> = ({
           onClick={onStop}
           className="p-2 text-gray-300 hover:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
           disabled={isBusy}
-          aria-label="Stop"
+          aria-label={t('transport.stop')}
         >
           <StopIcon className="w-5 h-5" />
         </button>
@@ -56,13 +58,13 @@ const TransportControls: React.FC<TransportControlsProps> = ({
           onClick={onPlayPause}
           className="p-2 bg-purple-600 text-white hover:bg-purple-700 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-purple-800 disabled:cursor-not-allowed"
           disabled={isBusy}
-          aria-label={isPlaying ? 'Pause' : 'Play'}
+          aria-label={isPlaying ? t('transport.pause') : t('transport.play')}
         >
           {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
         </button>
       </div>
       <div className="flex items-center gap-2">
-        <label htmlFor="mastering-preset" className="text-sm font-medium text-gray-400">Mastering:</label>
+        <label htmlFor="mastering-preset" className="text-sm font-medium text-gray-400">{t('transport.mastering')}</label>
         <select
           id="mastering-preset"
           value={selectedMasteringName}
@@ -81,10 +83,10 @@ const TransportControls: React.FC<TransportControlsProps> = ({
         disabled={isBusy || isPlaying}
       >
         <SaveIcon className="w-5 h-5" />
-        <span className="font-semibold text-sm">Save</span>
+        <span className="font-semibold text-sm">{t('transport.save')}</span>
       </button>
       <div className="flex items-center gap-2">
-        <label htmlFor="export-format" className="text-sm font-medium text-gray-400">Format:</label>
+        <label htmlFor="export-format" className="text-sm font-medium text-gray-400">{t('transport.format')}</label>
         <select
           id="export-format"
           value={exportFormat}

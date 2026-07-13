@@ -11,7 +11,9 @@ import { AudioEngineState, AudioEngineActions } from '../hooks/useAudioEngine';
 import { useClipClipboard } from '../hooks/useClipClipboard';
 import { useKeyboardShortcuts, KeyboardShortcut } from '../hooks/useKeyboardShortcuts';
 import { validateAudioFile, ExportFormat } from '../services/audioUtils';
+import { getSnapTargets, snapTime, clampToFreeSpace, SNAP_THRESHOLD_PX } from '../services/timelineUtils';
 import { notify } from './Toast';
+import { t } from '../i18n';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors, defaultDropAnimationSideEffects } from '@dnd-kit/core';
 
 interface EditorProps {
@@ -91,7 +93,15 @@ const Editor: React.FC<EditorProps> = ({
             const overlayLeft = event.active.rect.current.translated?.left ?? 0;
 
             const dropX = trackRect ? overlayLeft - trackRect.left : 0;
-            const startTime = Math.max(0, dropX / pixelsPerSecond);
+            let startTime = Math.max(0, dropX / pixelsPerSecond);
+
+            // Snap to grid/edges/playhead, then resolve overlaps on the target track.
+            const snapThreshold = SNAP_THRESHOLD_PX / pixelsPerSecond;
+            startTime = snapTime(startTime, getSnapTargets(project, null, audioActions.getCurrentTime()), snapThreshold);
+            const targetTrack = project.tracks.find(tr => tr.id === track.id);
+            if (targetTrack) {
+                startTime = clampToFreeSpace(targetTrack.clips, startTime, file.duration);
+            }
 
             const newClip: AudioClip = {
                 id: newId('clip'),
@@ -138,7 +148,7 @@ const Editor: React.FC<EditorProps> = ({
             addFiles(imported);
         }
         if (failed.length > 0) {
-            notify.error(`Could not decode the following files:\n${failed.join('\n')}`);
+            notify.error(t('toast.decodeFailed', { files: failed.join('\n') }));
         }
     }, [audioActions, addFiles, saveToHistory]);
 
@@ -148,7 +158,7 @@ const Editor: React.FC<EditorProps> = ({
         for (const file of files) {
             const validation = validateAudioFile(file);
             if (!validation.isValid) {
-                notify.warning(`File "${file.name}" was skipped: ${validation.error}`);
+                notify.warning(t('toast.fileSkipped', { name: file.name, error: validation.error ?? '' }));
                 continue;
             }
             candidates.push({
@@ -166,9 +176,9 @@ const Editor: React.FC<EditorProps> = ({
         const bridge = window.electron;
         if (!bridge) return;
         const result = await bridge.openFileDialog({
-            title: 'Import Audio Files',
+            title: t('dialog.importAudio'),
             multiple: true,
-            filters: [{ name: 'Audio Files', extensions: ['wav', 'mp3', 'ogg', 'flac', 'aac', 'm4a'] }],
+            filters: [{ name: t('dialog.audioFiles'), extensions: ['wav', 'mp3', 'ogg', 'flac', 'aac', 'm4a'] }],
         });
         if (result.canceled || result.filePaths.length === 0) return;
 
@@ -178,7 +188,7 @@ const Editor: React.FC<EditorProps> = ({
             try {
                 candidates.push({ name, path, type: '', data: await bridge.readFile(path) });
             } catch {
-                notify.error(`Could not read file: ${name}`);
+                notify.error(t('toast.readFailed', { name }));
             }
         }
         await importCandidates(candidates);
@@ -193,10 +203,15 @@ const Editor: React.FC<EditorProps> = ({
     }, [project, clipboard]);
 
     const handlePasteClip = useCallback((trackId: string, pasteTime: number) => {
-        const newClip = clipboard.pasteClip(trackId, pasteTime);
-        if (newClip) {
-            addClip(trackId, newClip);
-        }
+        const current = useAppStore.getState().project;
+        const targetTrack = current?.tracks.find(tr => tr.id === trackId);
+        const draft = clipboard.pasteClip(trackId, pasteTime);
+        if (!draft) return;
+
+        const startTime = targetTrack
+            ? clampToFreeSpace(targetTrack.clips, draft.startTime, draft.duration)
+            : draft.startTime;
+        addClip(trackId, { ...draft, startTime });
     }, [clipboard, addClip]);
 
     // Keyboard shortcuts
@@ -284,10 +299,12 @@ const Editor: React.FC<EditorProps> = ({
                             onDeleteClip={deleteClip}
                             onSeek={audioActions.seek}
                             onTimeUpdate={audioActions.onTimeUpdate}
+                            getCurrentTime={audioActions.getCurrentTime}
                             isPlaying={audioState.isPlaying}
                             pixelsPerSecond={pixelsPerSecond}
                             zoomIndex={zoomIndex}
                             onZoomChange={setZoomIndex}
+                            hasClipboardContent={clipboard.hasClipboardContent}
                             onCopyClip={handleCopyClip}
                             onPasteClip={handlePasteClip}
                         />

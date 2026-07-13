@@ -3,6 +3,7 @@ import React, { useCallback, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { AudioFile } from '@shared/types';
 import { CloseIcon } from './icons';
+import { useT } from '../i18n';
 
 interface DraggableFileProps {
   file: AudioFile;
@@ -11,6 +12,7 @@ interface DraggableFileProps {
 }
 
 const DraggableFile: React.FC<DraggableFileProps> = ({ file, onFileDelete, onFileClick }) => {
+  const t = useT();
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `file-${file.id}`,
     data: { type: 'file', file }
@@ -42,7 +44,7 @@ const DraggableFile: React.FC<DraggableFileProps> = ({ file, onFileDelete, onFil
         <button
           onClick={(e) => handleDeleteFile(e, file.id)}
           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white hover:bg-red-500 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10"
-          title="Delete file"
+          title={t('fileBin.deleteFile')}
         >
           <CloseIcon className="w-4 h-4" />
         </button>
@@ -60,6 +62,7 @@ interface FileBinProps {
 }
 
 const FileBin: React.FC<FileBinProps> = ({ files, onFileDrop, onImportClick, onFileDelete, onFileClick }) => {
+  const t = useT();
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -94,20 +97,20 @@ const FileBin: React.FC<FileBinProps> = ({ files, onFileDrop, onImportClick, onF
       onDrop={handleDrop}
     >
       <div className="flex items-center justify-between p-3 bg-gray-900 border-b border-gray-700">
-        <h2 className="text-lg font-semibold">File Bin</h2>
+        <h2 className="text-lg font-semibold">{t('fileBin.title')}</h2>
         {onImportClick && (
           <button
             onClick={onImportClick}
             className="px-2 py-1 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-md"
           >
-            + Import
+            {t('fileBin.import')}
           </button>
         )}
       </div>
       <div className="flex-1 overflow-y-auto p-2">
         {files.length === 0 ? (
           <div className="flex items-center justify-center h-full text-center text-gray-500 p-4">
-            <p>Drag & drop compatible audio files here.<br />(mp3, wav, ogg, flac)</p>
+            <p className="whitespace-pre-line">{t('fileBin.dropHint')}</p>
           </div>
         ) : (
           <ul className="space-y-2">

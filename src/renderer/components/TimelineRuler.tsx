@@ -12,38 +12,36 @@ const formatTime = (seconds: number) => {
 };
 
 const TimelineRuler: React.FC<TimelineRulerProps> = ({ duration, pixelsPerSecond }) => {
-    const ticks = [];
-    
-    // Adjust tick density based on zoom
-    let majorTickInterval = 5; // seconds
-    if (pixelsPerSecond < 40) majorTickInterval = 10;
-    if (pixelsPerSecond > 100) majorTickInterval = 2;
-    
-    const minorTicksPerMajor = pixelsPerSecond > 60 ? 5 : 2;
+    // Tick density adapts to zoom.
+    let majorInterval = 5; // seconds
+    if (pixelsPerSecond < 40) majorInterval = 10;
+    if (pixelsPerSecond > 100) majorInterval = 2;
 
-    for (let time = 0; time <= duration; time++) {
-        const isMajor = time % majorTickInterval === 0;
-        const isMinor = time % (majorTickInterval / minorTicksPerMajor) === 0;
+    const minorPerMajor = pixelsPerSecond > 60 ? 5 : 2;
+    const minorInterval = majorInterval / minorPerMajor;
+    const showMinor = pixelsPerSecond > 30;
 
-        if (isMajor) {
-            ticks.push({ time, type: 'major' });
-        } else if (isMinor && pixelsPerSecond > 30) { // Don't draw minor ticks when zoomed out too far
-            ticks.push({ time, type: 'minor' });
-        }
+    // Iterate by tick interval (not by second): long projects stay cheap.
+    const step = showMinor ? minorInterval : majorInterval;
+    const ticks: { time: number; isMajor: boolean }[] = [];
+    const epsilon = 1e-6;
+    for (let time = 0; time <= duration + epsilon; time += step) {
+        const isMajor = Math.abs(time / majorInterval - Math.round(time / majorInterval)) < epsilon;
+        ticks.push({ time, isMajor });
     }
 
     return (
         <div className="relative h-6 w-full" style={{ width: `${duration * pixelsPerSecond}px`}}>
-            {ticks.map(({time, type}) => (
-                <div 
+            {ticks.map(({ time, isMajor }) => (
+                <div
                     key={time}
                     className="absolute bottom-0 text-gray-400"
                     style={{ left: `${time * pixelsPerSecond}px` }}
                 >
-                    <div 
-                        className={`absolute bottom-0 w-px ${type === 'major' ? 'h-4 bg-gray-400' : 'h-2 bg-gray-600'}`}
+                    <div
+                        className={`absolute bottom-0 w-px ${isMajor ? 'h-4 bg-gray-400' : 'h-2 bg-gray-600'}`}
                     />
-                    {type === 'major' && (
+                    {isMajor && (
                         <span className="absolute -bottom-5 -translate-x-1/2 text-xs">
                             {formatTime(time)}
                         </span>

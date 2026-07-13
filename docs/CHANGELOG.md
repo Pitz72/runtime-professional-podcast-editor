@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.3] - 2026-07-13 - "Mestiere"
+
+Il giro delle **criticità medie**: workflow professionale quotidiano e localizzazione.
+
+### Localizzazione (Italiano + English US)
+- **i18n completo senza dipendenze** (`i18n.ts`): tutta la UI, i toast e i dialoghi in italiano e inglese US. Rilevamento automatico dalla lingua di sistema, selettore nella Welcome, scelta persistente.
+- **Menu nativo e dialog di sistema localizzati**: il main process segue la lingua scelta nel renderer (menu File/Modifica, conferme di chiusura, About).
+
+### Workflow
+- **Autosave di recupero**: ogni 60s il lavoro non salvato viene scritto in uno slot di recovery (`userData/autosave.json`); all'avvio, se presente, l'app propone il ripristino. Lo slot si svuota a ogni salvataggio manuale.
+- **Progetti recenti**: submenu File → Apri Recenti + lista cliccabile nella Welcome (max 10, persistiti in userData). I path recenti sono pre-autorizzati per il salvataggio.
+- **Persistenza della finestra**: posizione, dimensioni e stato maximized vengono ricordati tra le sessioni.
+- **Menu contestuale reale** sul tasto destro: "Incolla qui" sulle tracce, "Copia"/"Elimina" sui clip (niente più azioni immediate a sorpresa; il pulsante di delete flottante e il doppio-click-copia sono sostituiti dal menu).
+
+### Timeline
+- **Snapping**: i clip agganciano a griglia (1s), bordi degli altri clip e playhead durante spostamento, resize, drop e incolla; Alt disattiva. Soglia 8px indipendente dallo zoom.
+- **Anti-sovrapposizione**: i clip non si sovrappongono più sulla stessa traccia — spostamenti e drop vengono risolti nel gap libero più vicino (algoritmo gap-based testato), i resize si fermano ai clip adiacenti.
+- **Loop nativo**: un clip in loop ora usa un solo source node con `loop`/`loopStart`/`loopEnd` invece di centinaia di nodi impilati; il seek dentro le ripetizioni mappa correttamente nella regione di loop.
+- **Righello ottimizzato**: iterazione per tick (non per secondo) e fix dei tick minori che non comparivano mai per un modulo su divisore non intero.
+
+### Robustezza
+- Crash log locale: eccezioni non gestite del main e crash del renderer registrati in `userData/error.log`.
+
+**Dettagli completi**: [v0.0.3.md](v0.0.3.md)
+
+---
+
 ## [0.0.2] - 2026-07-13 - "Precisione"
 
 Il giro delle **criticità gravi**: correttezza audio, precisione delle interazioni e reattività della UI.

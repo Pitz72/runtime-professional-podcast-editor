@@ -32,8 +32,16 @@ export interface ElectronBridge {
   getFilePath(file: File): string;
 
   setDirty(dirty: boolean): void;
+  setLocale(locale: 'it' | 'en'): void;
 
-  onMenuEvent(channel: string, callback: () => void): () => void;
+  getRecentProjects(): Promise<string[]>;
+  addRecentProject(projectPath: string): Promise<boolean>;
+
+  autosaveWrite(payload: { projectPath: string | null; data: string }): Promise<boolean>;
+  autosaveRead(): Promise<{ savedAt: number; projectPath: string | null; data: string } | null>;
+  autosaveClear(): Promise<boolean>;
+
+  onMenuEvent(channel: string, callback: (...args: unknown[]) => void): () => void;
 }
 
 declare global {

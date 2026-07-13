@@ -112,7 +112,12 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
             const durationToPlay = clip.duration - offsetInClip;
             const playAt = clip.startTime < startOffset ? ac.currentTime : ac.currentTime + (clip.startTime - startOffset);
 
-            source.start(playAt, clip.offset + offsetInClip, durationToPlay);
+            // Looped clips wrap the seek position into the loop segment.
+            const bufferOffset = clip.loopSegmentDuration
+              ? clip.offset + (offsetInClip % clip.loopSegmentDuration)
+              : clip.offset + offsetInClip;
+
+            source.start(playAt, bufferOffset, durationToPlay);
             sourceNodesRef.current.set(clip.id, source);
           }
         }

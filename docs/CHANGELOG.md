@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.2] - 2026-07-13 - "Precisione"
+
+Il giro delle **criticità gravi**: correttezza audio, precisione delle interazioni e reattività della UI.
+
+### Audio
+- **Ducking corretto dopo seek/pausa**: le automazioni sono ora programmate relative alla posizione di partenza (`startOffset`), e ogni rampa è ancorata al valore corrente — prima le rampe partivano dall'ultimo punto schedulato (anche minuti prima), producendo pseudo-dissolvenze lunghissime.
+- **Solo rispettato in export**: l'export usa la stessa logica solo/mute del playback (prima il solo era ignorato).
+- **Encoding in Web Worker**: normalizzazione + WAV/MP3 girano in un worker dedicato (`exportEncoder.worker.ts`, bundle Vite separato) — l'export di progetti lunghi non congela più la UI. Encoder riscritti come funzioni pure su canali raw (`encoders.ts`), testabili e identiche su main thread e worker.
+- **Normalizzazione a −1 dBFS** invece di 0 dBFS (headroom professionale).
+- **Sample rate intelligente**: render alla frequenza massima delle sorgenti (floor 44.1kHz, cap 48kHz) invece di forzare tutto a 44.1kHz; lamejs ora sfrutta il supporto 48kHz nativo.
+
+### UI / Precisione
+- **Playhead senza re-render**: la posizione è gestita via subscription e scritture DOM dirette (`transform`), non più con `setState` a 60fps che ri-renderizzava l'intero editor a ogni frame.
+- **Waveform corretta**: disegna esattamente il segmento che il clip riproduce (rispetta `offset` e trim), con supporto `devicePixelRatio` (niente più waveform sfocate su HiDPI) e canvas con tetto di sicurezza a 8192px (prima superava il limite dei browser a zoom alto → waveform sparite/crash di memoria).
+- **Posizioni esatte per drop, incolla e seek**: rect misurati al momento dell'evento (riflettono già scroll e padding) — eliminati il doppio conteggio dello scroll nel drop dnd-kit e nell'incolla col tasto destro, e l'offset di 16px del padding nel seek.
+- **Toast non bloccanti**: sistema di notifiche (info/warning/error, auto-dismiss) al posto di tutti gli `alert()` che congelavano l'app.
+
+**Dettagli completi**: [v0.0.2.md](v0.0.2.md)
+
+---
+
 ## [0.0.1] - 2026-07-13 - "Fondamenta"
 
 > ⚠️ **Reboot del versioning.** Il refactoring è talmente profondo che il progetto riparte da v0.0.1. Le versioni precedenti (0.2.0 → 0.6.0) restano documentate qui sotto come storia della vecchia architettura.

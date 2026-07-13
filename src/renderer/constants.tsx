@@ -2,8 +2,8 @@ import React from 'react';
 import { Track, TrackKind } from '@shared/types';
 import { MusicIcon, MicIcon, SoundHighIcon, FXIcon } from './components/icons';
 
-export const APP_VERSION = '0.0.1';
-export const APP_VERSION_NAME = 'Fondamenta';
+export const APP_VERSION = '0.0.2';
+export const APP_VERSION_NAME = 'Precisione';
 export const APP_AUTHOR = 'Simone Pizzi';
 export const APP_NAME = 'Runtime Radio Podcast Toolkit';
 export const APP_DESCRIPTION = 'Desktop podcast production toolkit';

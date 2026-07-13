@@ -1,19 +1,27 @@
-// Audio processing utilities shared by playback and export.
+// Audio graph construction and file validation, shared by playback and export.
 
 import { Project, Track, TrackKind } from '@shared/types';
 import { DUCKING_AMOUNT, DUCKING_ATTACK, DUCKING_RELEASE } from '../constants';
-import * as lamejs from 'lamejs';
+
+export type { ExportFormat } from './encoders';
+export { getExportMimeType } from './encoders';
 
 // NOTE: AudioContext is NOT created here. It must be created lazily
 // after a user interaction (browser policy). Each hook manages its own context.
 
-
-// Helper to build the audio graph for both playback and export
+/**
+ * Build the audio graph for playback or offline export.
+ *
+ * @param startOffset Timeline position (seconds) playback starts from.
+ *                    Ducking automation is scheduled relative to it, so
+ *                    resuming mid-timeline keeps ducking in sync.
+ */
 export const buildAudioGraph = (
     context: BaseAudioContext,
     project: Project,
     tracksToProcess: Track[],
     totalDuration: number,
+    startOffset: number = 0,
 ) => {
     const masterBus = context.createGain();
 
@@ -53,20 +61,36 @@ export const buildAudioGraph = (
         // --- DUCKING LOGIC ---
         if ((track.kind === TrackKind.Music || track.kind === TrackKind.Background) && track.isDuckingEnabled && voiceEvents.length > 0) {
             const gainParam = trackGain.gain;
-            let activeVoices = 0;
 
-            gainParam.setValueAtTime(voiceEvents[0]?.time === 0 ? track.volume * DUCKING_AMOUNT : track.volume, context.currentTime);
+            // Voices already speaking at the start position determine the initial gain.
+            let activeVoices = voiceClips.filter(
+                c => c.startTime <= startOffset && c.startTime + c.duration > startOffset
+            ).length;
 
-            voiceEvents.forEach(event => {
-                const previousActiveVoices = activeVoices;
-                activeVoices += (event.type === 'start' ? 1 : -1);
+            gainParam.setValueAtTime(
+                activeVoices > 0 ? track.volume * DUCKING_AMOUNT : track.volume,
+                context.currentTime
+            );
 
-                if (previousActiveVoices === 0 && activeVoices > 0) {
-                    gainParam.linearRampToValueAtTime(track.volume * DUCKING_AMOUNT, context.currentTime + event.time + DUCKING_ATTACK);
-                } else if (previousActiveVoices > 0 && activeVoices === 0) {
-                    gainParam.linearRampToValueAtTime(track.volume, context.currentTime + event.time + DUCKING_RELEASE);
-                }
-            });
+            voiceEvents
+                .filter(event => event.time > startOffset)
+                .forEach(event => {
+                    const previousActiveVoices = activeVoices;
+                    activeVoices += (event.type === 'start' ? 1 : -1);
+
+                    const when = context.currentTime + (event.time - startOffset);
+
+                    // Anchor the current value right before each ramp, otherwise the
+                    // ramp would start from the previous automation point — possibly
+                    // minutes earlier — producing minutes-long pseudo-fades.
+                    if (previousActiveVoices === 0 && activeVoices > 0) {
+                        gainParam.setValueAtTime(track.volume, when);
+                        gainParam.linearRampToValueAtTime(track.volume * DUCKING_AMOUNT, when + DUCKING_ATTACK);
+                    } else if (previousActiveVoices > 0 && activeVoices === 0) {
+                        gainParam.setValueAtTime(track.volume * DUCKING_AMOUNT, when);
+                        gainParam.linearRampToValueAtTime(track.volume, when + DUCKING_RELEASE);
+                    }
+                });
         }
 
         // --- EFFECTS CHAIN ---
@@ -127,225 +151,6 @@ export const buildAudioGraph = (
 
     return { sources };
 };
-
-// WAV encoding function
-export function encodeWAV(audioBuffer: AudioBuffer): Blob {
-    const numOfChan = audioBuffer.numberOfChannels;
-    const length = audioBuffer.length * numOfChan * 2 + 44;
-    const buffer = new ArrayBuffer(length);
-    const view = new DataView(buffer);
-    const channels: Float32Array[] = [];
-    let i, sample;
-    let offset = 0;
-    let pos = 0;
-
-    // write WAVE header
-    setUint32(0x46464952); // "RIFF"
-    setUint32(length - 8); // file length - 8
-    setUint32(0x45564157); // "WAVE"
-
-    setUint32(0x20746d66); // "fmt " chunk
-    setUint32(16); // length = 16
-    setUint16(1); // PCM (uncompressed)
-    setUint16(numOfChan);
-    setUint32(audioBuffer.sampleRate);
-    setUint32(audioBuffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
-    setUint16(numOfChan * 2); // block-align
-    setUint16(16); // 16-bit samples
-
-    setUint32(0x61746164); // "data" - chunk
-    setUint32(length - pos - 4); // chunk length
-
-    // write interleaved data
-    for (i = 0; i < numOfChan; i++) {
-        channels.push(audioBuffer.getChannelData(i));
-    }
-
-    while (pos < length) {
-        for (i = 0; i < numOfChan; i++) {
-            sample = Math.max(-1, Math.min(1, channels[i][offset])); // clamp
-            sample = Math.round(sample < 0 ? sample * 32768 : sample * 32767); // scale to 16-bit signed int
-            view.setInt16(pos, sample, true); // write 16-bit sample
-            pos += 2;
-        }
-        offset++;
-    }
-
-    return new Blob([view], { type: 'audio/wav' });
-
-    function setUint16(data: number) {
-        view.setUint16(pos, data, true);
-        pos += 2;
-    }
-
-    function setUint32(data: number) {
-        view.setUint32(pos, data, true);
-        pos += 4;
-    }
-}
-
-// Export format utilities. Only formats with real encoders are offered.
-export type ExportFormat = 'wav' | 'mp3';
-
-export interface ExportOptions {
-    format: ExportFormat;
-    normalize: boolean;
-    bitrate?: number; // for MP3
-}
-
-export function getExportMimeType(format: ExportFormat): string {
-    return format === 'mp3' ? 'audio/mpeg' : 'audio/wav';
-}
-
-export function getSampleRateForLame(sampleRate: number): number {
-    // lamejs supports: 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
-    if (sampleRate >= 44100) return 44100;
-    if (sampleRate >= 32000) return 32000;
-    if (sampleRate >= 24000) return 24000;
-    if (sampleRate >= 22050) return 22050;
-    if (sampleRate >= 16000) return 16000;
-    if (sampleRate >= 12000) return 12000;
-    if (sampleRate >= 11025) return 11025;
-    return 8000;
-}
-
-// MP3 encoding using lamejs
-export function encodeMP3(audioBuffer: AudioBuffer, bitrate: number = 192): Blob {
-    const sampleRate = getSampleRateForLame(audioBuffer.sampleRate);
-    const channels = audioBuffer.numberOfChannels;
-
-    // Resample if necessary
-    let processedBuffer = audioBuffer;
-    if (audioBuffer.sampleRate !== sampleRate) {
-        processedBuffer = resampleAudioBuffer(audioBuffer, sampleRate);
-    }
-
-    // Convert to 16-bit PCM samples
-    const leftChannel = processedBuffer.getChannelData(0);
-    const rightChannel = channels > 1 ? processedBuffer.getChannelData(1) : leftChannel;
-
-    const leftSamples = new Int16Array(leftChannel.length);
-    const rightSamples = new Int16Array(rightChannel.length);
-
-    for (let i = 0; i < leftChannel.length; i++) {
-        leftSamples[i] = Math.max(-32768, Math.min(32767, leftChannel[i] * 32768));
-        rightSamples[i] = Math.max(-32768, Math.min(32767, rightChannel[i] * 32768));
-    }
-
-    // Create MP3 encoder
-    const encoder = new lamejs.Mp3Encoder(channels, sampleRate, bitrate);
-    const mp3Data: Int8Array[] = [];
-
-    // Process in chunks to avoid memory issues
-    const blockSize = 1152; // MP3 frame size
-    for (let i = 0; i < leftSamples.length; i += blockSize) {
-        const leftChunk = leftSamples.subarray(i, i + blockSize);
-        const rightChunk = rightSamples.subarray(i, i + blockSize);
-
-        const mp3buf = encoder.encodeBuffer(leftChunk, rightChunk);
-        if (mp3buf.length > 0) {
-            mp3Data.push(mp3buf);
-        }
-    }
-
-    // Finalize
-    const mp3buf = encoder.flush();
-    if (mp3buf.length > 0) {
-        mp3Data.push(mp3buf);
-    }
-
-    // Combine all MP3 data
-    const totalLength = mp3Data.reduce((sum, chunk) => sum + chunk.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of mp3Data) {
-        result.set(chunk, offset);
-        offset += chunk.length;
-    }
-
-    return new Blob([result], { type: 'audio/mpeg' });
-}
-
-// Simple audio buffer resampling (basic implementation)
-function resampleAudioBuffer(audioBuffer: AudioBuffer, targetSampleRate: number): AudioBuffer {
-    const sourceSampleRate = audioBuffer.sampleRate;
-    const channels = audioBuffer.numberOfChannels;
-    const sourceLength = audioBuffer.length;
-    const targetLength = Math.round(sourceLength * targetSampleRate / sourceSampleRate);
-
-    // Use OfflineAudioContext to create buffer without leaking AudioContext
-    const offlineCtx = new OfflineAudioContext(channels, targetLength, targetSampleRate);
-    const resampledBuffer = offlineCtx.createBuffer(channels, targetLength, targetSampleRate);
-
-    for (let channel = 0; channel < channels; channel++) {
-        const sourceData = audioBuffer.getChannelData(channel);
-        const targetData = resampledBuffer.getChannelData(channel);
-
-        // Simple linear interpolation resampling
-        for (let i = 0; i < targetLength; i++) {
-            const sourceIndex = (i / targetLength) * sourceLength;
-            const index = Math.floor(sourceIndex);
-            const fraction = sourceIndex - index;
-
-            if (index < sourceLength - 1) {
-                targetData[i] = sourceData[index] * (1 - fraction) + sourceData[index + 1] * fraction;
-            } else {
-                targetData[i] = sourceData[index];
-            }
-        }
-    }
-
-    return resampledBuffer;
-}
-
-export async function exportAudioBuffer(
-    audioBuffer: AudioBuffer,
-    options: ExportOptions
-): Promise<Blob> {
-    let processedBuffer = audioBuffer;
-    if (options.normalize) {
-        processedBuffer = normalizeAudioBuffer(audioBuffer);
-    }
-
-    switch (options.format) {
-        case 'mp3':
-            return encodeMP3(processedBuffer, options.bitrate ?? 192);
-        case 'wav':
-        default:
-            return encodeWAV(processedBuffer);
-    }
-}
-
-export function normalizeAudioBuffer(audioBuffer: AudioBuffer): AudioBuffer {
-    const numberOfChannels = audioBuffer.numberOfChannels;
-    const length = audioBuffer.length;
-    const sampleRate = audioBuffer.sampleRate;
-
-    // Find peak value across all channels
-    let peak = 0;
-    for (let channel = 0; channel < numberOfChannels; channel++) {
-        const channelData = audioBuffer.getChannelData(channel);
-        for (let i = 0; i < length; i++) {
-            peak = Math.max(peak, Math.abs(channelData[i]));
-        }
-    }
-
-    // Create normalized buffer (use OfflineAudioContext to avoid leaking)
-    const offlineCtx = new OfflineAudioContext(numberOfChannels, length, sampleRate);
-    const normalizedBuffer = offlineCtx.createBuffer(numberOfChannels, length, sampleRate);
-    const gain = peak > 0 ? 1.0 / peak : 1.0;
-
-    for (let channel = 0; channel < numberOfChannels; channel++) {
-        const originalData = audioBuffer.getChannelData(channel);
-        const normalizedData = normalizedBuffer.getChannelData(channel);
-
-        for (let i = 0; i < length; i++) {
-            normalizedData[i] = originalData[i] * gain;
-        }
-    }
-
-    return normalizedBuffer;
-}
 
 // File validation utilities
 export interface FileValidationResult {

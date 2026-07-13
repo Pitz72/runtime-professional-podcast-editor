@@ -1,11 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Project } from '@shared/types';
-import { buildAudioGraph, exportAudioBuffer, ExportFormat } from '../services/audioUtils';
+import { buildAudioGraph, ExportFormat } from '../services/audioUtils';
+import { encodeAudioBuffer } from '../services/exportService';
 import { MASTERING_PRESETS } from '../presets';
 
 export interface AudioEngineState {
   isPlaying: boolean;
-  currentTime: number;
   isExporting: boolean;
 }
 
@@ -15,20 +15,44 @@ export interface AudioEngineActions {
   playPause: () => void;
   stop: () => void;
   seek: (time: number) => void;
+  /**
+   * Playhead time without React re-renders: read it imperatively,
+   * or subscribe for per-frame updates (returns an unsubscribe).
+   */
+  getCurrentTime: () => number;
+  onTimeUpdate: (callback: (time: number) => void) => () => void;
   /** Render the mix offline and return the encoded blob (null if the project is empty). */
   exportAudio: (format?: ExportFormat) => Promise<Blob | null>;
 }
 
 export const useAudioEngine = (project: Project | null): [AudioEngineState, AudioEngineActions] => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodesRef = useRef<Map<string, AudioBufferSourceNode>>(new Map());
   const animationFrameRef = useRef<number | undefined>(undefined);
   const playbackStartTimeRef = useRef(0);
-  const seekOffsetRef = useRef(0);
+
+  // The playhead position is intentionally NOT React state: updating it at
+  // 60fps through setState would re-render the whole editor on every frame.
+  const currentTimeRef = useRef(0);
+  const timeListenersRef = useRef<Set<(time: number) => void>>(new Set());
+
+  const notifyTime = useCallback((time: number) => {
+    currentTimeRef.current = time;
+    timeListenersRef.current.forEach(listener => listener(time));
+  }, []);
+
+  const getCurrentTime = useCallback(() => currentTimeRef.current, []);
+
+  const onTimeUpdate = useCallback((callback: (time: number) => void) => {
+    timeListenersRef.current.add(callback);
+    callback(currentTimeRef.current);
+    return () => {
+      timeListenersRef.current.delete(callback);
+    };
+  }, []);
 
   const initAudioContext = useCallback((): AudioContext => {
     if (!audioContextRef.current) {
@@ -56,24 +80,24 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
     }
     setIsPlaying(false);
     if (resetTime) {
-      setCurrentTime(0);
-      seekOffsetRef.current = 0;
+      notifyTime(0);
     }
-  }, []);
+  }, [notifyTime]);
 
   const playPause = useCallback(() => {
     if (isPlaying) {
       stopPlayback(false);
-      seekOffsetRef.current = currentTime;
     } else {
       const ac = initAudioContext();
       if (!project) return;
+
+      const startOffset = currentTimeRef.current;
 
       const soloTrack = project.tracks.find(t => t.isSolo);
       const tracksToPlay = soloTrack ? [soloTrack] : project.tracks.filter(t => !t.isMuted);
       const totalDuration = Math.max(0, ...project.tracks.flatMap(t => t.clips.map(c => c.startTime + c.duration)));
 
-      const { sources } = buildAudioGraph(ac, project, tracksToPlay, totalDuration);
+      const { sources } = buildAudioGraph(ac, project, tracksToPlay, totalDuration, startOffset);
       sourceNodesRef.current.clear();
 
       playbackStartTimeRef.current = ac.currentTime;
@@ -81,12 +105,12 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
       sources.forEach(({ source, clip }) => {
         const file = project.files.find(f => f.id === clip.fileId);
         const clipEndTime = clip.startTime + clip.duration;
-        if (file && seekOffsetRef.current < clipEndTime) {
-          const offsetInClip = Math.max(0, seekOffsetRef.current - clip.startTime);
+        if (file && startOffset < clipEndTime) {
+          const offsetInClip = Math.max(0, startOffset - clip.startTime);
 
           if (offsetInClip < clip.duration) {
             const durationToPlay = clip.duration - offsetInClip;
-            const playAt = clip.startTime < seekOffsetRef.current ? ac.currentTime : ac.currentTime + (clip.startTime - seekOffsetRef.current);
+            const playAt = clip.startTime < startOffset ? ac.currentTime : ac.currentTime + (clip.startTime - startOffset);
 
             source.start(playAt, clip.offset + offsetInClip, durationToPlay);
             sourceNodesRef.current.set(clip.id, source);
@@ -100,25 +124,23 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
         const acNow = audioContextRef.current?.currentTime;
         if (!acNow || !animationFrameRef.current) return;
 
-        const newCurrentTime = seekOffsetRef.current + (acNow - playbackStartTimeRef.current);
+        const newCurrentTime = startOffset + (acNow - playbackStartTimeRef.current);
 
         if (totalDuration > 0 && newCurrentTime >= totalDuration) {
           stopPlayback(true);
         } else {
-          setCurrentTime(newCurrentTime);
+          notifyTime(newCurrentTime);
           animationFrameRef.current = requestAnimationFrame(tick);
         }
       };
       animationFrameRef.current = requestAnimationFrame(tick);
     }
-  }, [isPlaying, project, currentTime, stopPlayback, initAudioContext]);
+  }, [isPlaying, project, stopPlayback, initAudioContext, notifyTime]);
 
   const seek = useCallback((time: number) => {
     if (isPlaying) return;
-    const newTime = Math.max(0, time);
-    setCurrentTime(newTime);
-    seekOffsetRef.current = newTime;
-  }, [isPlaying]);
+    notifyTime(Math.max(0, time));
+  }, [isPlaying, notifyTime]);
 
   const exportAudio = useCallback(async (format: ExportFormat = 'wav'): Promise<Blob | null> => {
     if (!project) return null;
@@ -138,8 +160,17 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
         mastering: project.mastering || MASTERING_PRESETS[0].settings,
       };
 
-      const offlineContext = new OfflineAudioContext(2, Math.ceil(totalDuration * 44100), 44100);
-      const { sources } = buildAudioGraph(offlineContext, projectWithMastering, projectWithMastering.tracks.filter(t => !t.isMuted), totalDuration);
+      // Export honors solo exactly like playback does.
+      const soloTrack = project.tracks.find(t => t.isSolo);
+      const tracksToExport = soloTrack ? [soloTrack] : project.tracks.filter(t => !t.isMuted);
+
+      // Render at the highest source sample rate (44.1kHz floor, 48kHz cap)
+      // instead of forcing everything down to 44.1kHz.
+      const maxSourceRate = Math.max(0, ...project.files.map(f => f.buffer?.sampleRate ?? 0));
+      const renderSampleRate = Math.min(48000, Math.max(44100, maxSourceRate));
+
+      const offlineContext = new OfflineAudioContext(2, Math.ceil(totalDuration * renderSampleRate), renderSampleRate);
+      const { sources } = buildAudioGraph(offlineContext, projectWithMastering, tracksToExport, totalDuration, 0);
 
       sources.forEach(({ source, clip }) => {
         source.start(clip.startTime, clip.offset, clip.duration);
@@ -147,7 +178,8 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
 
       const renderedBuffer = await offlineContext.startRendering();
 
-      return await exportAudioBuffer(renderedBuffer, { format, normalize: true });
+      // Encoding (normalization included) happens in a Web Worker.
+      return await encodeAudioBuffer(renderedBuffer, format, true);
     } finally {
       setIsExporting(false);
     }
@@ -161,7 +193,6 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
 
   const state: AudioEngineState = {
     isPlaying,
-    currentTime,
     isExporting,
   };
 
@@ -171,6 +202,8 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
     playPause,
     stop: () => stopPlayback(true),
     seek,
+    getCurrentTime,
+    onTimeUpdate,
     exportAudio,
   };
 

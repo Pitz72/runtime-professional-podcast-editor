@@ -1,70 +1,114 @@
-// Automated tests for audio utilities and project persistence.
+// Automated tests for audio utilities, encoders and project persistence.
 
 import { describe, it, expect } from 'vitest'
+import { validateAudioFile, formatFileSize } from '../src/renderer/services/audioUtils'
 import {
   encodeWAV,
-  normalizeAudioBuffer,
-  validateAudioFile,
+  normalizeChannels,
   getSampleRateForLame,
-  formatFileSize,
-} from '../src/renderer/services/audioUtils'
+  resampleChannels,
+  NORMALIZE_TARGET_PEAK,
+  RawAudio,
+} from '../src/renderer/services/encoders'
+import { computePeaks } from '../src/renderer/hooks/useWaveformData'
 import { parseProject, serializeProject } from '../src/renderer/services/projectIO'
 import { Project, TrackKind, PROJECT_SCHEMA_VERSION } from '../src/shared/types'
 
-function createTestBuffer(length: number = 100, sampleRate: number = 44100, amplitude: number = 0.5): AudioBuffer {
-  const buffer = new AudioBuffer({ numberOfChannels: 2, length, sampleRate })
-  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-    const channelData = buffer.getChannelData(channel)
-    for (let i = 0; i < channelData.length; i++) {
-      channelData[i] = Math.sin(i * 0.1) * amplitude
+function createRawAudio(length: number = 100, sampleRate: number = 44100, amplitude: number = 0.5): RawAudio {
+  const channels = [new Float32Array(length), new Float32Array(length)]
+  for (const data of channels) {
+    for (let i = 0; i < data.length; i++) {
+      data[i] = Math.sin(i * 0.1) * amplitude
     }
   }
-  return buffer
+  return { channels, sampleRate, length }
 }
 
 describe('encodeWAV', () => {
-  it('encodes an audio buffer to a WAV blob with the right size', () => {
-    const buffer = createTestBuffer(100)
-    const wavBlob = encodeWAV(buffer)
+  it('encodes raw audio to WAV bytes with the right size', () => {
+    const audio = createRawAudio(100)
+    const bytes = encodeWAV(audio)
 
-    expect(wavBlob).toBeInstanceOf(Blob)
-    expect(wavBlob.type).toBe('audio/wav')
     // 44-byte header + samples * channels * 2 bytes
-    expect(wavBlob.size).toBe(44 + 100 * 2 * 2)
+    expect(bytes.length).toBe(44 + 100 * 2 * 2)
+    // RIFF magic
+    expect(String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3])).toBe('RIFF')
   })
 
-  it('handles an empty buffer', () => {
-    const buffer = createTestBuffer(0)
-    const wavBlob = encodeWAV(buffer)
-
-    expect(wavBlob.size).toBe(44)
+  it('handles empty audio', () => {
+    const bytes = encodeWAV(createRawAudio(0))
+    expect(bytes.length).toBe(44)
   })
 })
 
-describe('normalizeAudioBuffer', () => {
-  it('scales the peak up to 1.0 without clipping', () => {
-    const buffer = createTestBuffer(1000, 44100, 0.25)
-    const normalized = normalizeAudioBuffer(buffer)
-
-    expect(normalized.length).toBe(buffer.length)
-    expect(normalized.sampleRate).toBe(buffer.sampleRate)
-    expect(normalized.numberOfChannels).toBe(buffer.numberOfChannels)
+describe('normalizeChannels', () => {
+  it('normalizes the peak to -1 dBFS, not full scale', () => {
+    const audio = createRawAudio(1000, 44100, 0.25)
+    const normalized = normalizeChannels(audio)
 
     let maxPeak = 0
-    for (let channel = 0; channel < normalized.numberOfChannels; channel++) {
-      const data = normalized.getChannelData(channel)
+    for (const data of normalized.channels) {
       for (const sample of data) {
         maxPeak = Math.max(maxPeak, Math.abs(sample))
       }
     }
-    expect(maxPeak).toBeGreaterThan(0.99)
-    expect(maxPeak).toBeLessThanOrEqual(1.0)
+    expect(maxPeak).toBeCloseTo(NORMALIZE_TARGET_PEAK, 3)
+    expect(maxPeak).toBeLessThan(1.0)
   })
 
-  it('leaves a silent buffer untouched', () => {
-    const buffer = createTestBuffer(100, 44100, 0)
-    const normalized = normalizeAudioBuffer(buffer)
-    expect(Math.max(...normalized.getChannelData(0))).toBe(0)
+  it('leaves silent audio untouched', () => {
+    const audio = createRawAudio(100, 44100, 0)
+    const normalized = normalizeChannels(audio)
+    expect(Math.max(...normalized.channels[0])).toBe(0)
+  })
+})
+
+describe('getSampleRateForLame', () => {
+  it('keeps 48kHz sources at 48kHz (lamejs supports it)', () => {
+    expect(getSampleRateForLame(48000)).toBe(48000)
+    expect(getSampleRateForLame(96000)).toBe(48000)
+  })
+
+  it('maps other rates to supported ones', () => {
+    expect(getSampleRateForLame(44100)).toBe(44100)
+    expect(getSampleRateForLame(22050)).toBe(22050)
+    expect(getSampleRateForLame(8000)).toBe(8000)
+  })
+})
+
+describe('resampleChannels', () => {
+  it('halves the sample count when halving the rate', () => {
+    const audio = createRawAudio(1000, 48000)
+    const resampled = resampleChannels(audio, 24000)
+    expect(resampled.length).toBe(500)
+    expect(resampled.sampleRate).toBe(24000)
+  })
+
+  it('is a no-op at the same rate', () => {
+    const audio = createRawAudio(100, 44100)
+    expect(resampleChannels(audio, 44100)).toBe(audio)
+  })
+})
+
+describe('computePeaks', () => {
+  it('computes peaks only for the requested segment', () => {
+    // 2 seconds at 100 Hz: first second silent, second second loud
+    const buffer = new AudioBuffer({ numberOfChannels: 1, length: 200, sampleRate: 100 })
+    const data = buffer.getChannelData(0)
+    for (let i = 100; i < 200; i++) data[i] = 0.8
+
+    const silentPeaks = computePeaks(buffer, 0, 1, 10)
+    const loudPeaks = computePeaks(buffer, 1, 1, 10)
+
+    expect(Math.max(...silentPeaks)).toBe(0)
+    expect(Math.max(...loudPeaks)).toBeCloseTo(0.8, 5)
+  })
+
+  it('returns zeroed peaks for out-of-range segments', () => {
+    const buffer = new AudioBuffer({ numberOfChannels: 1, length: 100, sampleRate: 100 })
+    const peaks = computePeaks(buffer, 10, 1, 5)
+    expect(peaks).toHaveLength(5)
+    expect(Math.max(...peaks)).toBe(0)
   })
 })
 
@@ -91,15 +135,6 @@ describe('validateAudioFile', () => {
     const result = validateAudioFile({ size: 2048, type: 'application/octet-stream', name: 'mystery.bin' })
     expect(result.isValid).toBe(true)
     expect(result.warnings!.length).toBeGreaterThan(0)
-  })
-})
-
-describe('getSampleRateForLame', () => {
-  it('maps sample rates to lamejs-supported rates', () => {
-    expect(getSampleRateForLame(48000)).toBe(44100)
-    expect(getSampleRateForLame(44100)).toBe(44100)
-    expect(getSampleRateForLame(22050)).toBe(22050)
-    expect(getSampleRateForLame(8000)).toBe(8000)
   })
 })
 
@@ -146,7 +181,10 @@ describe('project persistence', () => {
   it('never embeds audio buffers in the serialized project', () => {
     const withBuffer: Project = {
       ...sampleProject,
-      files: [{ ...sampleProject.files[0], buffer: createTestBuffer(44100) }],
+      files: [{
+        ...sampleProject.files[0],
+        buffer: new AudioBuffer({ numberOfChannels: 2, length: 44100, sampleRate: 44100 }),
+      }],
     }
     const json = serializeProject(withBuffer)
     expect(json).not.toContain('buffer')

@@ -11,6 +11,7 @@ import { AudioEngineState, AudioEngineActions } from '../hooks/useAudioEngine';
 import { useClipClipboard } from '../hooks/useClipClipboard';
 import { useKeyboardShortcuts, KeyboardShortcut } from '../hooks/useKeyboardShortcuts';
 import { validateAudioFile, ExportFormat } from '../services/audioUtils';
+import { notify } from './Toast';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors, defaultDropAnimationSideEffects } from '@dnd-kit/core';
 
 interface EditorProps {
@@ -82,15 +83,15 @@ const Editor: React.FC<EditorProps> = ({
             const file = active.data.current.file as AudioFile;
             const track = over.data.current.track as Track;
 
-            const overElementNode = over.rect;
-            const dropX = (event.active.rect.current.translated?.left || 0) - overElementNode.left;
-
+            // Measure the track rect NOW (drop time): a fresh rect already reflects
+            // scroll position, so no scrollLeft math — the old approach double-counted
+            // the scroll offset and used a rect captured at drag start.
             const trackElement = document.getElementById(`track-${track.id}`);
-            const timelineContainer = trackElement?.closest('.overflow-auto');
-            const scrollLeft = timelineContainer ? timelineContainer.scrollLeft : 0;
+            const trackRect = trackElement?.getBoundingClientRect();
+            const overlayLeft = event.active.rect.current.translated?.left ?? 0;
 
-            const adjustedDropX = dropX + scrollLeft;
-            const startTime = Math.max(0, adjustedDropX / pixelsPerSecond);
+            const dropX = trackRect ? overlayLeft - trackRect.left : 0;
+            const startTime = Math.max(0, dropX / pixelsPerSecond);
 
             const newClip: AudioClip = {
                 id: newId('clip'),
@@ -137,7 +138,7 @@ const Editor: React.FC<EditorProps> = ({
             addFiles(imported);
         }
         if (failed.length > 0) {
-            alert(`Could not decode the following files:\n\n${failed.join('\n')}`);
+            notify.error(`Could not decode the following files:\n${failed.join('\n')}`);
         }
     }, [audioActions, addFiles, saveToHistory]);
 
@@ -147,7 +148,7 @@ const Editor: React.FC<EditorProps> = ({
         for (const file of files) {
             const validation = validateAudioFile(file);
             if (!validation.isValid) {
-                alert(`File "${file.name}" was skipped: ${validation.error}`);
+                notify.warning(`File "${file.name}" was skipped: ${validation.error}`);
                 continue;
             }
             candidates.push({
@@ -177,7 +178,7 @@ const Editor: React.FC<EditorProps> = ({
             try {
                 candidates.push({ name, path, type: '', data: await bridge.readFile(path) });
             } catch {
-                alert(`Could not read file: ${name}`);
+                notify.error(`Could not read file: ${name}`);
             }
         }
         await importCandidates(candidates);
@@ -217,7 +218,7 @@ const Editor: React.FC<EditorProps> = ({
             action: () => {
                 const selected = useAppStore.getState().selectedItem;
                 if (selected?.type === 'track' && clipboard.hasClipboardContent) {
-                    handlePasteClip(selected.id, audioState.currentTime);
+                    handlePasteClip(selected.id, audioActions.getCurrentTime());
                 }
             },
             description: 'Paste clip to selected track'
@@ -232,7 +233,7 @@ const Editor: React.FC<EditorProps> = ({
             },
             description: 'Delete selected clip'
         }
-    ], [handleCopyClip, handlePasteClip, deleteClip, clipboard.hasClipboardContent, audioState.currentTime]);
+    ], [handleCopyClip, handlePasteClip, deleteClip, clipboard.hasClipboardContent, audioActions]);
 
     useKeyboardShortcuts(keyboardShortcuts);
 
@@ -281,8 +282,8 @@ const Editor: React.FC<EditorProps> = ({
                             onAddTrack={addTrack}
                             onDeleteTrack={deleteTrack}
                             onDeleteClip={deleteClip}
-                            currentTime={audioState.currentTime}
                             onSeek={audioActions.seek}
+                            onTimeUpdate={audioActions.onTimeUpdate}
                             isPlaying={audioState.isPlaying}
                             pixelsPerSecond={pixelsPerSecond}
                             zoomIndex={zoomIndex}

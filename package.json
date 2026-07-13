@@ -1,7 +1,7 @@
 {
   "name": "runtime-radio-podcast-toolkit",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "dist/main/main.cjs",
   "type": "module",
   "scripts": {
@@ -50,7 +50,7 @@
     "appId": "com.runtimeradio.podcast-toolkit",
     "productName": "Runtime Radio Podcast Toolkit",
     "directories": {
-      "output": "builds/0.0.1"
+      "output": "builds/0.0.2"
     },
     "files": [
       "dist/**/*",

@@ -1,62 +1,62 @@
 import React, { useRef, useEffect } from 'react';
-import { useWaveformData } from '../hooks/useWaveformData';
+import { useWaveformPeaks, MAX_PEAK_COLUMNS } from '../hooks/useWaveformData';
 
 interface WaveformDisplayProps {
   audioBuffer: AudioBuffer | null;
+  /** Segment of the file the clip plays, in seconds. */
+  offset: number;
+  duration: number;
+  /** CSS size of the waveform area. */
   width: number;
   height: number;
   color?: string;
-  backgroundColor?: string;
   className?: string;
-  quality?: 'low' | 'medium' | 'high';
 }
 
 const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
   audioBuffer,
+  offset,
+  duration,
   width,
   height,
   color = '#60a5fa',
-  backgroundColor = 'transparent',
   className = '',
-  quality = 'medium'
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const waveformData = useWaveformData(audioBuffer, width, height, quality as 'low' | 'medium' | 'high');
+
+  // Backing store sized for the device pixel ratio, capped for safety:
+  // beyond the cap the (already sub-pixel) columns are stretched by CSS.
+  const dpr = typeof window !== 'undefined' ? Math.max(1, window.devicePixelRatio || 1) : 1;
+  const backingWidth = Math.min(Math.max(1, Math.round(width * dpr)), MAX_PEAK_COLUMNS);
+  const backingHeight = Math.max(1, Math.round(height * dpr));
+
+  const peaks = useWaveformPeaks(audioBuffer, offset, duration, backingWidth);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !waveformData) return;
+    if (!canvas || !peaks) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = backingWidth;
+    canvas.height = backingHeight;
 
-    // Clear canvas
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, width, height);
-
-    // Draw waveform
+    ctx.clearRect(0, 0, backingWidth, backingHeight);
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
     ctx.beginPath();
 
-    const centerY = height / 2;
+    const centerY = backingHeight / 2;
 
-    waveformData.peaks.forEach((peak, i) => {
-      const x = i;
-      const amplitude = peak * (height / 2);
-
-      // Draw vertical line from center
-      ctx.moveTo(x, centerY - amplitude);
-      ctx.lineTo(x, centerY + amplitude);
-    });
+    for (let x = 0; x < peaks.length; x++) {
+      const amplitude = peaks[x] * centerY;
+      ctx.moveTo(x + 0.5, centerY - amplitude);
+      ctx.lineTo(x + 0.5, centerY + amplitude);
+    }
 
     ctx.stroke();
-
-  }, [waveformData, width, height, color, backgroundColor]);
+  }, [peaks, backingWidth, backingHeight, color]);
 
   if (!audioBuffer) {
     return (
@@ -73,7 +73,7 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
     <canvas
       ref={canvasRef}
       className={className}
-      style={{ width, height }}
+      style={{ width: '100%', height: '100%' }}
     />
   );
 };

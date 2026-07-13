@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import WelcomeScreen from './components/WelcomeScreen';
 import Editor from './components/Editor';
+import { ToastContainer, notify } from './components/Toast';
 import { useAppStore } from './store';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { openProjectFromDisk, saveProjectToDisk } from './services/projectIO';
@@ -46,13 +47,13 @@ const App: React.FC = () => {
       audioActions.stop();
       loadProject(result.project, result.path);
       if (result.missingFiles.length > 0) {
-        alert(
-          `Some audio files could not be loaded:\n\n${result.missingFiles.join('\n')}\n\n` +
+        notify.warning(
+          `Some audio files could not be loaded:\n${result.missingFiles.join('\n')}\n` +
           'Their clips are kept in the timeline but will stay silent until the files are restored.'
         );
       }
     } catch (error) {
-      alert(`Could not open the project: ${error instanceof Error ? error.message : 'unknown error'}`);
+      notify.error(`Could not open the project: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
   }, [confirmDiscard, loadProject, audioActions]);
 
@@ -61,9 +62,12 @@ const App: React.FC = () => {
     if (!current) return;
     try {
       const savedPath = await saveProjectToDisk(current, currentPath, saveAs);
-      if (savedPath) markSaved(savedPath);
+      if (savedPath) {
+        markSaved(savedPath);
+        notify.info('Project saved.');
+      }
     } catch (error) {
-      alert(`Could not save the project: ${error instanceof Error ? error.message : 'unknown error'}`);
+      notify.error(`Could not save the project: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
   }, [markSaved]);
 
@@ -74,7 +78,7 @@ const App: React.FC = () => {
     try {
       const blob = await audioActions.exportAudio(chosenFormat);
       if (!blob) {
-        alert('The project is empty. Add some clips before exporting.');
+        notify.warning('The project is empty. Add some clips before exporting.');
         return;
       }
       const dialogResult = await window.electron.saveFileDialog({
@@ -84,8 +88,9 @@ const App: React.FC = () => {
       });
       if (dialogResult.canceled || !dialogResult.filePath) return;
       await window.electron.writeFile(dialogResult.filePath, await blob.arrayBuffer());
+      notify.info(`Audio exported to ${dialogResult.filePath}`);
     } catch (error) {
-      alert(`Audio export failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+      notify.error(`Audio export failed: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
   }, [audioActions, exportFormat]);
 
@@ -122,6 +127,7 @@ const App: React.FC = () => {
           onLoadProject={() => { void handleOpenProject(); }}
         />
       )}
+      <ToastContainer />
     </div>
   );
 };

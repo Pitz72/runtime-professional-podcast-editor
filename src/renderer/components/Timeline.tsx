@@ -24,6 +24,37 @@ const DroppableTrack: React.FC<{ track: Track; children: React.ReactNode; onCont
   );
 };
 
+/**
+ * The playhead moves via direct DOM writes driven by the audio engine's
+ * time subscription — NOT via React state. Re-rendering the whole timeline
+ * 60 times per second would make the editor unusable on real projects.
+ */
+const Playhead: React.FC<{
+  pixelsPerSecond: number;
+  onTimeUpdate: (callback: (time: number) => void) => () => void;
+  onMouseDown: (e: React.MouseEvent) => void;
+}> = ({ pixelsPerSecond, onTimeUpdate, onMouseDown }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    return onTimeUpdate(time => {
+      if (ref.current) {
+        ref.current.style.transform = `translateX(${time * pixelsPerSecond}px)`;
+      }
+    });
+  }, [onTimeUpdate, pixelsPerSecond]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-0 left-0 w-0.5 h-full bg-red-500 z-30 cursor-ew-resize"
+      onMouseDown={onMouseDown}
+    >
+      <div className="absolute -top-4 -left-1.5 w-4 h-4 bg-red-500 rounded-full"></div>
+    </div>
+  );
+};
+
 type Interaction = {
   type: 'move' | 'resize-left' | 'resize-right';
   clipId: string;
@@ -47,8 +78,8 @@ interface TimelineProps {
   onAddTrack: (kind: TrackKind) => void;
   onDeleteTrack: (trackId: string) => void;
   onDeleteClip: (clipId: string) => void;
-  currentTime: number;
   onSeek: (time: number) => void;
+  onTimeUpdate: (callback: (time: number) => void) => () => void;
   isPlaying: boolean;
   pixelsPerSecond: number;
   zoomIndex: number;
@@ -57,8 +88,12 @@ interface TimelineProps {
   onPasteClip?: (trackId: string, pasteTime: number) => void;
 }
 
-const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteractionStart, selectedItem, onSelectItem, onAddTrack, onDeleteTrack, onDeleteClip, currentTime, onSeek, isPlaying, pixelsPerSecond, zoomIndex, onZoomChange, onCopyClip, onPasteClip }) => {
+const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteractionStart, selectedItem, onSelectItem, onAddTrack, onDeleteTrack, onDeleteClip, onSeek, onTimeUpdate, isPlaying, pixelsPerSecond, zoomIndex, onZoomChange, onCopyClip, onPasteClip }) => {
   const timelineContainerRef = useRef<HTMLDivElement>(null);
+  // The scrolled content area: fresh getBoundingClientRect() on this element
+  // already accounts for scroll AND container padding, so position math
+  // never needs manual scrollLeft/padding corrections.
+  const contentRef = useRef<HTMLDivElement>(null);
   const [interaction, setInteraction] = useState<Interaction | null>(null);
 
   const totalDuration = Math.max(60, ...project.tracks.flatMap(t => t.clips.map(c => c.startTime + c.duration)));
@@ -102,13 +137,10 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
     const handleMouseMove = (e: MouseEvent) => {
       if (!interaction) return;
 
-      const timelineRect = timelineContainerRef.current?.getBoundingClientRect();
-      if (!timelineRect) return;
-
       if (interaction.type === 'seek') {
-        const scrollLeft = timelineContainerRef.current?.scrollLeft || 0;
-        const newX = e.clientX - timelineRect.left + scrollLeft;
-        const newTime = Math.max(0, newX / pixelsPerSecond);
+        const contentRect = contentRef.current?.getBoundingClientRect();
+        if (!contentRect) return;
+        const newTime = Math.max(0, (e.clientX - contentRect.left) / pixelsPerSecond);
         onSeek(newTime);
         return;
       }
@@ -176,7 +208,7 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
       <div className="sticky top-0 z-20 bg-gray-800/50 py-2">
         <TimelineRuler duration={totalDuration} pixelsPerSecond={pixelsPerSecond} />
       </div>
-      <div className="relative" style={{ width: `${totalDuration * pixelsPerSecond}px` }}>
+      <div className="relative" style={{ width: `${totalDuration * pixelsPerSecond}px` }} ref={contentRef}>
         {project.tracks.map(track => (
           <div
             key={track.id}
@@ -205,10 +237,11 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
               track={track}
               onContextMenu={(e) => {
                 e.preventDefault();
-                // Show paste option if clipboard has content
                 if (onPasteClip) {
-                  const scrollLeft = timelineContainerRef.current?.scrollLeft ?? 0;
-                  const pasteTime = Math.max(0, (e.clientX - e.currentTarget.getBoundingClientRect().left + scrollLeft) / pixelsPerSecond);
+                  // The track rect is queried at event time: it already reflects
+                  // scroll position, no manual scrollLeft correction needed.
+                  const trackRect = e.currentTarget.getBoundingClientRect();
+                  const pasteTime = Math.max(0, (e.clientX - trackRect.left) / pixelsPerSecond);
                   onPasteClip(track.id, pasteTime);
                 }
               }}
@@ -232,13 +265,11 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
             </DroppableTrack>
           </div>
         ))}
-        <div
-          className="absolute top-0 left-0 w-0.5 h-full bg-red-500 z-30 cursor-ew-resize"
-          style={{ transform: `translateX(${currentTime * pixelsPerSecond}px)` }}
+        <Playhead
+          pixelsPerSecond={pixelsPerSecond}
+          onTimeUpdate={onTimeUpdate}
           onMouseDown={handlePlayheadInteraction}
-        >
-          <div className="absolute -top-4 -left-1.5 w-4 h-4 bg-red-500 rounded-full"></div>
-        </div>
+        />
       </div>
       <div className="pt-4 flex justify-center gap-4 items-center">
         <button onClick={() => onAddTrack(TrackKind.Voice)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-md text-sm">

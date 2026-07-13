@@ -63,15 +63,16 @@ const Clip: React.FC<ClipProps> = ({ clip, file, isSelected, pixelsPerSecond, on
       onDoubleClick={handleDoubleClick}
       title={onCopy ? "Double-click to copy clip" : undefined}
     >
-      {/* Waveform background */}
+      {/* Waveform background — renders exactly the trimmed segment this clip plays */}
       {file?.buffer && (
         <div className="absolute inset-0 opacity-60 pointer-events-none">
           <WaveformDisplay
             audioBuffer={file.buffer}
+            offset={clip.offset}
+            duration={clip.duration}
             width={clip.duration * pixelsPerSecond}
             height={80}
             color={isSelected ? '#c084fc' : '#93c5fd'}
-            backgroundColor="transparent"
             className="w-full h-full"
           />
         </div>

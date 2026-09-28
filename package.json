@@ -52,7 +52,7 @@
     "appId": "com.runtimeradio.podcast-toolkit",
     "productName": "Runtime Radio Podcast Toolkit",
     "directories": {
-      "output": "builds/0.0.3"
+      "output": "builds/0.0.4"
     },
     "files": [
       "dist/**/*",
@@ -62,6 +62,12 @@
       "target": [
         {
           "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
           "arch": [
             "x64"
           ]

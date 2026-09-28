@@ -1,246 +1,115 @@
-# Regression Testing Guide - Runtime Radio Podcast Toolkit v1.0.0
+# Regression Testing Guide — Runtime Radio Podcast Toolkit
 
-## 🎯 **Purpose**
-This document outlines comprehensive regression testing procedures to ensure that new features and bug fixes don't break existing functionality in Runtime Radio Podcast Toolkit v1.0.0 "The Sonic Generational Evolution".
-
-## 📋 **Testing Categories**
-
-### **1. Core Functionality Tests**
-
-#### **Audio Playback & Recording**
-- [ ] **Basic Playback**: Load WAV file, play/pause/stop controls work
-- [ ] **Multi-track Playback**: Multiple tracks play simultaneously with correct timing
-- [ ] **Recording**: Audio input recording works with level monitoring
-- [ ] **Seek Functionality**: Playhead movement and timeline scrubbing
-- [ ] **Loop Playback**: Looped clips play correctly for full project duration
-
-#### **File Management**
-- [ ] **File Import**: Drag & drop MP3, WAV, OGG, FLAC files
-- [ ] **File Validation**: Reject invalid files with appropriate error messages
-- [ ] **File Deletion**: Remove files and associated clips properly
-- [ ] **Large Files**: Handle files up to 2GB without memory issues
-- [ ] **Data URL Persistence**: Project save/load maintains audio data
-
-#### **Timeline Editing**
-- [ ] **Clip Creation**: Drag files to timeline creates clips at correct positions
-- [ ] **Clip Movement**: Drag clips horizontally maintains audio sync
-- [ ] **Clip Resizing**: Trim start/end points preserves audio content
-- [ ] **Clip Deletion**: Remove clips without affecting other tracks
-- [ ] **Multi-track Editing**: Operations work across different track types
-
-### **2. Audio Processing Tests**
-
-#### **Effects & Presets**
-- [ ] **Preset Application**: All 22 presets (6 voice + 8 music + 8 mastering) apply correctly
-- [ ] **Compressor Settings**: Threshold, knee, ratio, attack, release parameters work
-- [ ] **EQ Settings**: Frequency, gain, Q factor adjustments function properly
-- [ ] **Master Bus**: Mastering effects apply to final mix
-- [ ] **Effect Bypass**: Disable/enable effects without audio glitches
-
-#### **AI Enhancement**
-- [ ] **AI Preset Generation**: Gemini AI creates valid presets from descriptions
-- [ ] **Fallback System**: Local presets work when AI fails
-- [ ] **Retry Logic**: Automatic retry on network failures
-- [ ] **Error Handling**: Graceful degradation with user feedback
-
-#### **Audio Analysis**
-- [ ] **Basic Metrics**: Duration, sample rate, channels display correctly
-- [ ] **Quality Metrics**: LUFS, True Peak, Crest Factor calculations accurate
-- [ ] **Spectral Analysis**: Centroid, rolloff, flux values reasonable
-- [ ] **Problem Detection**: Clipping, DC offset, noise floor identification
-
-### **3. User Interface Tests**
-
-#### **Basic Controls**
-- [ ] **Transport Controls**: Play, pause, stop, record buttons functional
-- [ ] **Volume Controls**: Individual track volumes and master volume
-- [ ] **Mute/Solo**: Track isolation works correctly
-- [ ] **Zoom Controls**: Timeline zoom in/out maintains clip positions
-- [ ] **Scroll**: Timeline scrolling works smoothly
-
-#### **Advanced Editing**
-- [ ] **Copy/Paste**: Ctrl+C/Ctrl+V clipboard operations work
-- [ ] **Delete Operations**: Delete key removes selected items
-- [ ] **Context Menus**: Right-click paste functionality
-- [ ] **Double-click Copy**: Clip double-click copies to clipboard
-- [ ] **Keyboard Shortcuts**: All documented shortcuts functional
-
-#### **Visual Feedback**
-- [ ] **Waveform Display**: Audio waveforms render correctly at all zoom levels
-- [ ] **Selection States**: Selected clips/tracks highlight properly
-- [ ] **Hover Effects**: UI elements respond to mouse hover
-- [ ] **Loading States**: Buffering and processing indicators work
-- [ ] **Error Messages**: Clear, actionable error feedback
-
-### **4. Export & Import Tests**
-
-#### **Audio Export**
-- [ ] **WAV Export**: 16-bit WAV files export with correct audio content
-- [ ] **Export Timing**: Exported audio matches timeline playback
-- [ ] **Multi-track Mix**: All tracks mix correctly in export
-- [ ] **Effects Included**: Processing applied in exported files
-- [ ] **File Naming**: Automatic naming with project title
-
-#### **Project Management**
-- [ ] **Project Save**: All project data saves to JSON correctly
-- [ ] **Project Load**: Saved projects load with all data intact
-- [ ] **Undo/Redo**: Full undo/redo history maintained
-- [ ] **Auto-save**: Project state preserved on errors
-- [ ] **Version Compatibility**: Projects load from previous versions
-
-### **5. Performance Tests**
-
-#### **Load Times**
-- [ ] **Initial Load**: Application loads in < 3 seconds
-- [ ] **Project Load**: Large projects (50+ clips) load in < 10 seconds
-- [ ] **Audio Buffering**: Files buffer without blocking UI
-- [ ] **Memory Usage**: Memory stays under 300MB for large projects
-- [ ] **CPU Usage**: Processing doesn't exceed 80% CPU
-
-#### **Responsiveness**
-- [ ] **UI Interactions**: All controls respond within 100ms
-- [ ] **Playback Start**: Audio starts within 50ms of play command
-- [ ] **Timeline Scrubbing**: Smooth scrubbing at 60fps
-- [ ] **Zoom Operations**: Zoom changes complete within 200ms
-- [ ] **File Operations**: Import/export operations provide progress feedback
-
-#### **Scalability**
-- [ ] **Large Projects**: Handle 100+ clips without performance degradation
-- [ ] **Long Recordings**: Process 2+ hour audio files
-- [ ] **Many Tracks**: Support 20+ simultaneous tracks
-- [ ] **Complex Effects**: Multiple effects chains don't cause latency
-- [ ] **Memory Cleanup**: Automatic cleanup prevents memory leaks
-
-### **6. Browser Compatibility Tests**
-
-#### **Modern Browsers**
-- [ ] **Chrome 100+**: Full functionality on latest Chrome
-- [ ] **Firefox 100+**: All features work on Firefox
-- [ ] **Safari 15+**: Compatible with Safari
-- [ ] **Edge 100+**: Full support on Chromium Edge
-
-#### **Web Audio API**
-- [ ] **Audio Context**: Proper AudioContext initialization
-- [ ] **Media Permissions**: Microphone access requests work
-- [ ] **Audio Playback**: Web Audio playback functions correctly
-- [ ] **Recording**: getUserMedia recording works
-- [ ] **Processing**: Audio processing nodes function properly
-
-### **7. Error Handling Tests**
-
-#### **Network Errors**
-- [ ] **AI Service Down**: Graceful fallback when Gemini unavailable
-- [ ] **Slow Connection**: Timeout handling for slow responses
-- [ ] **API Limits**: Proper handling of API rate limits
-- [ ] **Authentication**: API key validation and error messages
-
-#### **Audio Errors**
-- [ ] **Corrupt Files**: Proper error messages for damaged audio
-- [ ] **Unsupported Formats**: Clear messages for unsupported files
-- [ ] **Buffer Errors**: Recovery from audio buffer failures
-- [ ] **Device Errors**: Handling of audio device failures
-
-#### **System Errors**
-- [ ] **Memory Issues**: Graceful handling of out-of-memory conditions
-- [ ] **Storage Full**: Proper handling when disk space exhausted
-- [ ] **Permission Denied**: Clear messages for denied permissions
-- [ ] **Browser Limits**: Handling of browser resource limits
-
-## 🧪 **Automated Testing**
-
-### **Test Commands**
-```bash
-# Run all tests
-npm test
-
-# Run tests with UI
-npm run test:ui
-
-# Run tests once (CI mode)
-npm run test:run
-
-# Run specific test file
-npm test audioUtils.test.ts
-```
-
-### **Test Coverage Requirements**
-- **Unit Tests**: Minimum 80% coverage for critical functions
-- **Integration Tests**: All component interactions tested
-- **Audio Functions**: All audio processing algorithms validated
-- **UI Components**: All user interactions covered
-- **Error Paths**: All error conditions handled
-
-## 📊 **Performance Benchmarks**
-
-### **Load Time Benchmarks**
-- **Cold Start**: < 3 seconds
-- **Hot Reload**: < 1 second
-- **Project Load**: < 5 seconds for typical projects
-- **Audio Buffer**: < 2 seconds for 10MB files
-
-### **Memory Benchmarks**
-- **Initial Memory**: < 100MB
-- **Large Project**: < 300MB with 100 clips
-- **Memory Leak**: < 10MB growth after 1 hour usage
-- **Cleanup Efficiency**: 90%+ memory recovery after operations
-
-### **Audio Benchmarks**
-- **Playback Latency**: < 10ms
-- **Recording Latency**: < 20ms
-- **Processing Latency**: < 5ms for real-time effects
-- **Export Time**: < 30 seconds for 1-hour project
-
-## 🔄 **Release Testing Checklist**
-
-### **Pre-Release**
-- [ ] All automated tests pass
-- [ ] Manual regression tests completed
-- [ ] Performance benchmarks met
-- [ ] Cross-browser testing completed
-- [ ] Bundle size within limits
-- [ ] Documentation updated
-
-### **Post-Release**
-- [ ] Error monitoring active
-- [ ] User feedback collection
-- [ ] Performance monitoring
-- [ ] Update channels monitored
-- [ ] Support tickets tracked
-
-## 📞 **Issue Reporting**
-
-When reporting issues, please include:
-- Browser and version
-- Operating system
-- Steps to reproduce
-- Expected vs actual behavior
-- Console error messages
-- Project file (if applicable)
-- Audio files (if applicable)
-
-## 🎯 **Quality Gates**
-
-### **Blocking Issues**
-- Any crash or data loss
-- Audio playback failures
-- Export failures
-- Critical UI breakage
-- Security vulnerabilities
-
-### **Major Issues**
-- Performance degradation > 50%
-- Missing core functionality
-- Incorrect audio processing
-- Data corruption
-
-### **Minor Issues**
-- UI polish issues
-- Performance optimizations
-- Documentation updates
-- Feature enhancements
+**Target Version:** 0.0.3 "Mestiere"  
+**Platform:** Windows Desktop Application (Electron + React 19 + TypeScript)  
+**Quality Rule:** Every release must satisfy the gates below before merge or packaging.
 
 ---
 
-**Regression Testing Guide v1.0**
-**Runtime Radio Podcast Toolkit v1.0.0**
-**Last Updated: 2025-09-25**
+## 🚦 1. Automated Verification Gates
+
+Execute these three commands in order. All must exit with code 0:
+
+```bash
+# 1. Typecheck (Renderer + Main process)
+npm run typecheck
+
+# 2. Linting (Zero warnings permitted)
+npm run lint
+
+# 3. Unit & Integration Test Suite
+npm run test:run
+```
+
+### Current Automated Test Coverage (31 Tests in `tests/audioUtils.test.ts`):
+- [x] **WAV Encoding**: Correct 44-byte RIFF/WAVE header, byte sizing, and zero-length safety.
+- [x] **Peak Normalization**: Peak target clamped to −1 dBFS (`NORMALIZE_TARGET_PEAK ≈ 0.8913`), silent audio preserved.
+- [x] **Sample Rate Mapping**: Lamejs compatible sample rate mapping (up to 48 kHz).
+- [x] **Linear Resampling**: Sample count calculation and downsampling interpolation.
+- [x] **Segment Waveform Peak Computation**: Extracts peaks only for the active clip segment (`offset → offset + duration`).
+- [x] **Timeline Snapping**: Snapping to grid (1s), clip boundaries, playhead, and positive time clamp.
+- [x] **Anti-Overlap Engine**: Placement into closest available track gap, small-gap skipping, packing to track end.
+- [x] **Resize Boundaries**: Clipping at neighboring clip start/end boundaries.
+- [x] **File Validation**: File size caps (>2GB rejected, <1KB rejected), format detection.
+- [x] **Project Serialization**: Roundtrip serialize/parse, exclusion of volatile `AudioBuffer` objects, rejection of invalid JSON, dropping orphan clips referencing non-existent files, volume clamping (0.0 to 1.0).
+
+---
+
+## 🏗️ 2. Build Pipeline Verification
+
+Verify production compilation of both main and renderer processes:
+
+```bash
+# Compile Vite frontend bundle
+npm run build:renderer
+
+# Compile Electron main process (tsconfig.electron.json)
+npm run build:main
+```
+
+Ensure the `dist/` directory contains:
+- `dist/index.html`
+- `dist/assets/main-*.js`
+- `dist/assets/main-*.css`
+- `dist/assets/exportEncoder.worker-*.js`
+- `dist/main/main.cjs`
+- `dist/main/preload.cjs`
+
+---
+
+## 🧪 3. Manual Desktop Smoke Test Checklist
+
+Execute these manual tests on the running application (`npm run dev` or unpacked build):
+
+### A. Window Lifecycle & Environment Memory
+- [ ] **Launch**: App opens centered or maximized according to previous state.
+- [ ] **Window State Memory**: Resize window to 1100x700, close app, reopen. Window opens at 1100x700.
+- [ ] **Single Instance**: Attempting to launch a second instance focuses the existing window rather than opening duplicate processes.
+- [ ] **Language Sync**: Change language to *Italiano* on the Welcome Screen. Verify:
+  - Welcome labels change immediately.
+  - Native application menus (`File`, `Modifica`, `Visualizza`, `Aiuto`) change immediately.
+  - Close confirmation dialog appears in Italian.
+
+### B. Project Persistence & Data Protection
+- [ ] **New Project**: Click "Nuovo Progetto" — editor loads with 4 initial tracks (Music, Background, Voice 1, Sound FX).
+- [ ] **Dirty Flag**: Add a clip or modify volume — title bar indicates unsaved changes.
+- [ ] **Exit Confirmation**: Click the window close [✕] button with unsaved changes. The native dialog prompts to discard or cancel.
+- [ ] **Save Project**: Press `Ctrl+S` — opens native Windows Save dialog. Save as `test_show.json`.
+- [ ] **Recent Projects**: Close app, reopen. `test_show.json` appears in the "Progetti recenti" list and in `File → Apri Recenti`.
+- [ ] **Crash Recovery Slot**:
+  1. Open a project and make modifications.
+  2. Wait 60 seconds (autosave interval).
+  3. Force kill the app from Task Manager.
+  4. Relaunch the app.
+  5. The recovery dialog prompts: *"È stato trovato un backup automatico con modifiche non salvate. Vuoi recuperarlo?"*
+  6. Click "Recupera" — workspace is restored with audio re-decoded from disk paths.
+
+### C. File Bin & Drag-and-Drop
+- [ ] **OS Drag & Drop**: Drag a WAV/MP3 file from Windows Explorer into the File Bin. File appears with name and duration.
+- [ ] **Import Button**: Click `+ Importa` in File Bin. Select audio files via native dialog. Files load properly.
+- [ ] **File Delete**: Hover over a file card and click [✕]. Associated clips on the timeline are cleanly removed without errors.
+
+### D. Timeline Editing & DAW Ergonomics
+- [ ] **Bin to Timeline**: Drag file from bin to Voice traccia. Clip appears at cursor position.
+- [ ] **Magnetic Snapping**: Drag clip near 1s markers or other clip edges — clip snaps cleanly.
+- [ ] **Alt Bypass**: Hold `Alt` while dragging — snapping is disabled for smooth sub-second positioning.
+- [ ] **Anti-Overlap**: Drag a clip directly on top of another clip on the same track. Clip shifts to the nearest free gap.
+- [ ] **Trimming**: Drag left/right handles of a clip. Waveform and playback adjust accordingly.
+- [ ] **Loop Toggle**: In Properties panel, enable "Loop Clip" for a music track. Clip shows loop icon and repeats indefinitely.
+- [ ] **Context Menu**:
+  - Right-click on empty track space → "Incolla qui" appears.
+  - Right-click on clip → "Copia clip" and "Elimina clip" appear.
+- [ ] **Keyboard Shortcuts**:
+  - Select clip + `Ctrl+C`, select track + `Ctrl+V`: Clip pasted at playhead time.
+  - Select clip + `Delete`: Clip removed and pushed to undo history.
+  - `Ctrl+Z` / `Ctrl+Y`: Reverts and reapplies timeline actions.
+
+### E. Audio Engine & Ducking
+- [ ] **Playback**: Click Play (or spacebar once implemented). Playhead moves smoothly at 60fps without UI stutter.
+- [ ] **Automatic Ducking**: Place a voice clip overlapping a music clip. Start playback. Music volume smoothly ducks to 20% during voice and returns to normal afterwards.
+- [ ] **Stop**: Clicking Stop halts audio and resets playhead to 0.
+
+### F. Export Engine (Web Worker)
+- [ ] **WAV Export**: Select WAV, click "Esporta". File renders in background worker, saves via native dialog, and plays cleanly in external media player.
+- [ ] **MP3 Export**: Select MP3, click "Esporta". Worker encodes to 192kbps MP3 without freezing the UI.
+- [ ] **Peak Headroom**: Analyze exported file in an external meter — peak does not exceed −1.0 dBFS.

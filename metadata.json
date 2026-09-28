@@ -1,6 +1,5 @@
 {
-  "name": "Runtime Radio - Podcast Creation Kit",
-  "description": "A desktop audio editing application designed to build podcasts. It allows you to compose your show from music, background ambience, voice tracks, and sound effects, with curated audio presets to achieve a professional sound with ease.",
-  "requestFramePermissions": [],
-  "prompt": ""
+  "name": "Runtime Radio Podcast Toolkit",
+  "description": "Desktop podcast production toolkit. Compose your show from music, ambience, voice tracks and sound effects with curated audio presets, automatic ducking, and professional WAV/MP3 export.",
+  "requestFramePermissions": []
 }

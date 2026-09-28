@@ -2,6 +2,8 @@
   "name": "runtime-radio-podcast-toolkit",
   "private": true,
   "version": "0.0.3",
+  "description": "Desktop podcast production toolkit",
+  "author": "Simone Pizzi",
   "main": "dist/main/main.cjs",
   "type": "module",
   "scripts": {

@@ -1,577 +1,191 @@
-# User Guide - Runtime Radio Podcast Toolkit v1.0.0 "The Sonic Generational Evolution"
+# User Guide — Runtime Radio Podcast Toolkit
 
-## 🎙️ **Welcome to Runtime Radio Podcast Toolkit**
-
-A professional Digital Audio Workstation designed specifically for podcast production. This guide will help you master all the features and create broadcast-quality podcasts.
-
----
-
-## 🚀 **Getting Started**
-
-### **System Requirements**
-- **Browser**: Chrome 100+, Firefox 100+, Safari 15+, Edge 100+
-- **Audio**: Web Audio API support (enabled by default in modern browsers)
-- **Storage**: 500MB free space for projects and audio files
-- **Internet**: Required for AI features (optional for basic editing)
-
-### **First Launch**
-1. Open your browser and navigate to the application
-2. You'll see the welcome screen with version information
-3. Click **"New Project"** to start creating your podcast
-4. Or click **"Load Project"** to open an existing project
+**Current Version:** 0.0.3 "Mestiere"  
+**Platform:** Windows Desktop Application (Electron + React 19 + TypeScript)  
+**Author:** Simone Pizzi  
 
 ---
 
-## 🎵 **Core Workflow**
+## 🎙️ Welcome to Runtime Radio Podcast Toolkit
 
-### **1. Import Audio Files**
-```
-File Bin (Left Panel) → Drag & Drop → Timeline
-```
+**Runtime Radio Podcast Toolkit** is a desktop application designed to empower journalists, podcasters, and content creators to produce broadcast-quality podcast episodes without requiring audio engineering expertise.
 
-**Supported Formats:**
-- MP3, WAV, OGG, FLAC
-- Up to 2GB per file
-- Batch import supported
-
-**Steps:**
-1. Locate audio files on your computer
-2. Drag them into the **File Bin** (left panel)
-3. Files appear with name and duration
-4. Drag files from bin to timeline to create clips
-
-### **2. Create Your Timeline**
-```
-Timeline (Center) → Drag clips → Arrange → Edit
-```
-
-**Track Types:**
-- **🎤 Voice**: Main narration and dialogue
-- **🎵 Music**: Background music and themes
-- **🌊 Background**: Ambient sounds and atmospheres
-- **💥 FX**: Sound effects and transitions
-
-**Basic Editing:**
-- **Move**: Drag clips left/right on timeline
-- **Resize**: Drag edges to trim start/end
-- **Delete**: Hover over clip → Click red X button
-- **Zoom**: Use zoom controls for precision editing
-
-### **3. Apply Audio Enhancement**
-```
-Properties Panel (Right) → Select clip/track → Apply effects
-```
-
-**AI-Powered Enhancement:**
-1. Select a voice clip
-2. Go to Properties panel
-3. Describe your audio (e.g., "Podcast voice with room reverb")
-4. Click "Enhance with AI"
-5. Gemini analyzes and creates optimal settings
-
-**Manual Effects:**
-- **Volume**: Adjust track or clip volume
-- **EQ**: Frequency shaping with presets
-- **Compression**: Dynamic range control
-- **Pan**: Stereo positioning
-
-### **4. Record New Audio**
-```
-Transport Controls → Record button → Speak/Sing → Stop
-```
-
-**Recording Setup:**
-1. Click the **Record** button in transport controls
-2. Select audio input device
-3. Monitor levels (avoid red clipping indicators)
-4. Click **Record** to start
-5. Click **Stop** when finished
-6. New clip appears on selected track
-
-### **5. Mix and Master**
-```
-Master Section → Compressor → Export
-```
-
-**Mastering Steps:**
-1. Set master compressor for consistency
-2. Adjust overall levels
-3. Enable ducking for voice-over-music
-4. Preview final mix
-
-### **6. Export Your Podcast**
-```
-File Menu → Export → Choose format → Download
-```
-
-**Export Options:**
-- **Format**: WAV (lossless), MP3, FLAC, AAC
-- **Quality**: Sample rate, bit depth, channels
-- **Processing**: Normalization, effects inclusion
-- **Mode**: Mix (final) or Stems (individual tracks)
+The software is **opinionated**: it handles technical acoustics (compression, parametric equalization, ducking, and peak headroom) with curated presets and human-readable controls, allowing you to focus on your story and pacing.
 
 ---
 
-## 🎛️ **Detailed Feature Guide**
+## 🚀 Getting Started
 
-### **File Management**
+### System Requirements
+* **Operating System:** Windows 10 / Windows 11 (64-bit)
+* **Memory:** Minimum 4 GB RAM (8 GB recommended for multi-track projects)
+* **Storage:** 200 MB for application + project audio storage
+* **Network:** None required. All audio processing, effects, and exports run **100% locally and offline**.
 
-#### **Importing Files**
-```
-Method 1: Drag & Drop
-1. Select files in file explorer
-2. Drag into File Bin area
-3. Drop to import
+### First Launch & Language Selection
+1. Launch **Runtime Radio Podcast Toolkit** from the Start Menu, desktop shortcut, or dev environment (`npm run dev`).
+2. On the **Welcome Screen**, choose your preferred language (**Italiano** or **English US**) via the dropdown at the bottom. The chosen language immediately syncs across all interface panels, notifications, and native system menus.
+3. Choose an action:
+   * **New Project**: Starts a clean workspace with default Voice, Music, Background, and FX tracks.
+   * **Load Project**: Opens a native file dialog to select a previously saved `.json` project file.
+   * **Recent Projects**: Directly reopen any of your last 10 projects.
 
-Method 2: Click to Browse
-1. Click in File Bin area
-2. Select files in dialog
-3. Click Open to import
-```
+---
 
-#### **File Operations**
-- **Preview**: Hover over file to see waveform preview
-- **Delete**: Click X button on file (removes all associated clips)
-- **Info**: View duration, format, size
-- **Analysis**: Right-click → Analyze for detailed metrics
+## 🎛️ Workspace Overview
 
-### **Timeline Editing**
+The application interface is divided into four main sections:
 
-#### **Clip Manipulation**
 ```
-Move: Click and drag clip horizontally
-Resize Left: Drag left edge to trim start
-Resize Right: Drag right edge to trim end
-Delete: Hover → Click red X in top-right
-Split: Double-click to split at playhead (future feature)
-```
-
-#### **Track Management**
-```
-Add Track: Click "+" buttons below timeline
-Delete Track: Click X on track header
-Reorder: Drag track headers vertically
-Solo/Mute: Click S/M buttons on tracks
-Volume: Drag volume faders
-```
-
-#### **Navigation**
-```
-Zoom: Use +/- buttons or mouse wheel + Ctrl
-Scroll: Drag timeline background or use scrollbars
-Playhead: Click timeline to jump to position
-Follow: Playhead auto-scrolls during playback
-```
-
-### **Audio Effects**
-
-#### **Track Effects**
-- **Volume**: -∞ to +12dB
-- **Pan**: -100% (left) to +100% (right)
-- **Mute/Solo**: Isolate tracks for mixing
-- **EQ**: Frequency shaping (future expansion)
-- **Compression**: Dynamic control (future expansion)
-
-#### **AI Enhancement**
-```
-For Voice Tracks:
-1. Select voice clip
-2. Open Properties panel
-3. Describe audio: "Clear podcast voice with slight reverb"
-4. Click "Enhance with AI"
-5. Wait for Gemini analysis
-6. Apply suggested preset
-```
-
-#### **Master Effects**
-- **Master Volume**: Overall output level
-- **Master Compressor**: Glue the mix together
-- **Ducking**: Auto-reduce music during voice
-
-### **Recording System**
-
-#### **Setup Recording**
-```
-1. Click Record button in transport
-2. Select input device from dropdown
-3. Choose destination track
-4. Set recording levels
-5. Enable monitoring if needed
-```
-
-#### **Recording Process**
-```
-Pre-roll: 2 seconds of pre-recording buffer
-Monitoring: Hear yourself with slight delay
-Levels: Green=good, Yellow=hot, Red=clipping
-Stop: Click stop or spacebar
-```
-
-#### **Multi-track Recording**
-```
-1. Arm multiple tracks (record-enable)
-2. Start recording on all armed tracks
-3. Record different sources simultaneously
-4. Stop all recordings at once
-```
-
-### **Analysis & Quality Control**
-
-#### **Audio Analysis**
-```
-Access: Right-click clip → Analyze
-Or: Select clip → Properties → Analysis tab
-
-Metrics Provided:
-- LUFS (Loudness Units)
-- True Peak levels
-- Crest Factor
-- Dynamic Range
-- Frequency Spectrum
-- Noise Floor
-- DC Offset
-- Clipping Detection
-```
-
-#### **Quality Recommendations**
-```
-Based on analysis, get suggestions:
-- "Increase loudness" (if too quiet)
-- "Reduce peaks" (if clipping)
-- "Add compression" (if dynamic range too wide)
-- "Filter low end" (if rumble detected)
-```
-
-### **Export System**
-
-#### **Export Formats**
-```
-WAV: Lossless, highest quality, largest files
-FLAC: Lossless compressed, good compression
-MP3: Lossy, small files, universal compatibility
-AAC: Lossy, web-optimized, streaming friendly
-```
-
-#### **Export Settings**
-```
-Quality Presets:
-- CD Quality: 44.1kHz, 16-bit
-- Professional: 48kHz, 24-bit
-- High-End: 96kHz, 32-bit
-
-Processing Options:
-- Include Effects: Apply track processing
-- Normalize: Auto-level adjustment
-- Dithering: Reduce quantization noise
-```
-
-#### **Stem Export**
-```
-Export individual tracks as separate files:
-1. Choose "Export Stems" mode
-2. Select format and quality
-3. Each track becomes separate file
-4. Useful for post-production mixing
+┌────────────────────────────────────────────────────────────────────────┐
+│  HEADER: Title & Transport Controls (Play, Stop, Mastering, Save, Export) │
+├──────────────┬─────────────────────────────────────────────────────────┤
+│ FILE BIN     │ TIMELINE RULER & PLAYHEAD                               │
+│ [ + Import ] ├─────────────────────────────────────────────────────────┤
+│ • File List  │ TRACK 1: Voice                                          │
+│              │ [ Clip 1 ]        [ Clip 2 ]                            │
+│              ├─────────────────────────────────────────────────────────┤
+│              │ TRACK 2: Music                                          │
+│              │ [ Background Music (Looped) ]                           │
+├──────────────┤                                                         │
+│ PROPERTIES   │ TRACK 3: Background Ambience                            │
+│ • Volume     ├─────────────────────────────────────────────────────────┤
+│ • Ducking    │ TRACK 4: Sound FX                                       │
+│ • Presets    ├─────────────────────────────────────────────────────────┤
+│              │ [ + Add Voice Track ]  [ + Add Music Track ]  [ - Zoom +]│
+└──────────────┴─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🎹 **Keyboard Shortcuts**
+## 📁 1. Managing Audio Files (File Bin)
 
-### **Playback Control**
-- **Space**: Play/Pause
-- **Ctrl + Space**: Stop and return to start
-- **Enter**: Record start/stop
+The **File Bin** on the left stores the audio assets imported into the current project.
 
-### **Navigation**
-- **←/→**: Nudge playhead by 1 second
-- **Shift + ←/→**: Nudge by 10 seconds
-- **Ctrl + ←/→**: Jump to previous/next clip
-- **Home/End**: Jump to start/end of project
+### Supported Audio Formats
+* **WAV** (`.wav`, uncompressed PCM)
+* **MP3** (`.mp3`, MPEG Audio Layer 3)
+* **OGG** (`.ogg`, Ogg Vorbis)
+* **FLAC** (`.flac`, Free Lossless Audio Codec)
+* **AAC / M4A** (`.aac`, `.m4a`)
 
-### **Editing**
-- **Delete**: Remove selected clip
-- **Ctrl + C/V**: Copy/paste clips (future)
-- **Ctrl + Z/Y**: Undo/Redo
-- **Ctrl + A**: Select all clips on track
-- **Esc**: Deselect all
+### Importing Audio
+You can add audio files using two methods:
+1. **Direct Drag & Drop**: Select one or more audio files in Windows Explorer and drag them into the File Bin area.
+2. **Native Import Dialog**: Click the **"+ Import"** button at the top of the File Bin to open the Windows file picker.
 
-### **Zoom & View**
-- **Ctrl + +/-**: Zoom in/out
-- **Ctrl + 0**: Fit project to view
-- **Ctrl + F**: Focus on selected clip
+> [!NOTE]
+> When files are imported, their absolute paths on disk are retained. Audio data is kept in memory while editing and re-decoded from disk upon reopening projects, keeping project files lightweight and clean.
 
-### **File Operations**
-- **Ctrl + N**: New project
-- **Ctrl + O**: Open project
-- **Ctrl + S**: Save project
-- **Ctrl + E**: Export audio
+### File Properties & Deletion
+* Click any file in the File Bin to view its properties in the panel below (duration, file path, and decoded status).
+* Hover over a file card and click the **✕** button to delete it. Deleting a file removes all clips on the timeline that reference it.
 
 ---
 
-## 🔧 **Advanced Features**
+## 🎵 2. Multi-Track Timeline Editing
 
-### **AI Integration**
+### Adding Clips to Tracks
+* Drag an audio file from the File Bin and drop it onto any track on the timeline.
+* The clip is created with the full duration of the file and placed at the dropped time position.
 
-#### **Smart Preset Generation**
-```
-Gemini analyzes your audio and creates custom presets:
-- Voice cleaning for podcasts
-- Music enhancement
-- Problem-solving (reverb removal, noise reduction)
-- Broadcast optimization
-```
+### Track Types
+* **🎤 Voice**: Intended for speech, dialogue, and interviews.
+* **🎵 Music**: Background tracks and theme tunes. Features automatic ducking under voice tracks.
+* **🌊 Background**: Environmental sounds, room tone, and soundscapes.
+* **💥 FX**: Sound effects, jingles, stingers, and short transitions.
 
-#### **Context-Aware Suggestions**
-```
-Based on your project:
-- Detects podcast vs music production
-- Adapts to voice types (male/female, accent)
-- Considers room acoustics
-- Optimizes for target platform (Spotify, Apple, etc.)
-```
+### Magnetic Snapping
+When dragging or resizing clips:
+* Clips magnetically snap to the **1-second grid**, to the edges of other clips on the timeline, and to the **playhead position**.
+* **Hold `Alt`** while dragging to temporarily bypass magnetic snapping for micro-adjustments.
 
-### **Performance Optimization**
+### Anti-Overlap Protection
+Clips on the same track will never collide or overwrite each other. When moving or dropping a clip:
+* The timeline engine automatically finds the nearest free gap on the track that fits the clip duration.
+* Resizing handles automatically stop when hitting adjacent clips.
 
-#### **Large Project Handling**
-```
-For projects with 50+ clips:
-- Lazy loading of waveforms
-- Background audio processing
-- Memory cleanup automatic
-- Progressive loading
-```
+### Trimming & Resizing Clips
+* Hover over the left or right edge of a clip to reveal the resize handle (cursor turns into `↔`).
+* Drag the left handle to trim the start point (adjusting internal audio offset).
+* Drag the right handle to trim the duration.
 
-#### **Real-time Monitoring**
-```
-Performance metrics always visible:
-- CPU usage
-- Memory consumption
-- Audio buffer status
-- Network status (for AI features)
-```
-
-### **Collaboration Features** (Future)
-```
-- Project sharing
-- Real-time collaboration
-- Version control
-- Comment system
-```
+### Looping Clips
+For music beds and ambient backgrounds:
+1. Select a music or background clip.
+2. In the **Properties Panel**, toggle **"Loop Clip"**.
+3. A repeat icon appears on the clip, and the audio will automatically loop continuously for the entire duration of the project.
 
 ---
 
-## 🐛 **Troubleshooting**
+## 🎚️ 3. Audio Processing & Ducking
 
-### **Audio Issues**
+### Automatic Voice Ducking
+To ensure background music never overpowers speech:
+1. In the **Properties Panel**, select a Music or Background track.
+2. Ensure **"Automatic Ducking"** is checked (enabled by default).
+3. Whenever speech occurs on any Voice track, the music volume is automatically and smoothly attenuated to 20% (-14 dB) with hardware-like, click-free audio automation ramps.
 
-#### **No Sound**
-```
-Check:
-- Browser audio permissions
-- System audio settings
-- Audio device selection
-- File format compatibility
-```
+### Curated Presets
+Select any track to choose from curated EQ and compressor settings:
+* **Voice Presets (6)**: *Modern Podcast Clarity*, *Warm Broadcast Voice*, *Deep & Rich Narrator*, *Bright & Present Interview*, *Telephone Effect*, *Vintage Radio Effect*.
+* **Music Presets (8)**: *Punchy Pop/Rock*, *Lofi Vibe*, *Ambient Background*, *Jazz/Soul Warmth*, *Electronic/Dance*, *Classical/Acoustic*, *Hip-Hop/Urban*, *Folk/Acoustic Bright*.
 
-#### **Audio Glitches**
-```
-Solutions:
-- Reduce number of active tracks
-- Close other audio applications
-- Restart browser
-- Check system resources
-```
-
-#### **Recording Problems**
-```
-- Check microphone permissions
-- Select correct input device
-- Adjust input levels
-- Close background applications
-```
-
-### **Performance Issues**
-
-#### **Slow Loading**
-```
-Optimize:
-- Reduce project size
-- Close unused browser tabs
-- Update browser
-- Check internet connection (for AI)
-```
-
-#### **UI Freezing**
-```
-Fix:
-- Save and reload project
-- Clear browser cache
-- Restart browser
-- Check system memory
-```
-
-### **File Issues**
-
-#### **Import Failures**
-```
-Supported formats: MP3, WAV, OGG, FLAC
-Max file size: 2GB
-Check file corruption
-Try different browser
-```
-
-#### **Export Problems**
-```
-Check available disk space
-Try different format
-Disable effects if issues persist
-Check browser compatibility
-```
+### Master Bus Limiter
+In the header transport controls, select a mastering compressor preset:
+* *Standard Broadcast* (default)
+* *Subtle Glue*
+* *Loud & Punchy*
+* *Transparent Limiting*
+* *Vintage Tube Warmth*
+* *Modern Digital*
+* *Gentle Evening Out*
 
 ---
 
-## 📚 **Best Practices**
+## ⌨️ 4. Keyboard Shortcuts & Context Menus
 
-### **Podcast Production**
+| Action | Shortcut | Context |
+|---|---|---|
+| **Copy Clip** | `Ctrl + C` | Clip selected |
+| **Paste Clip** | `Ctrl + V` | Track selected (pastes at playhead) |
+| **Delete Clip** | `Delete` | Clip selected |
+| **New Project** | `Ctrl + N` | Global |
+| **Open Project** | `Ctrl + O` | Global |
+| **Save Project** | `Ctrl + S` | Global |
+| **Save Project As** | `Ctrl + Shift + S` | Global |
+| **Export Audio** | `Ctrl + E` | Global |
+| **Undo** | `Ctrl + Z` | Global (up to 50 steps) |
+| **Redo** | `Ctrl + Y` | Global |
+| **Bypass Snapping** | Hold `Alt` | During drag / resize |
 
-#### **Recording Setup**
-```
-- Use quality microphone (USB or XLR)
-- Record in quiet environment
-- Use pop filter for plosives
-- Maintain consistent distance from mic
-- Monitor levels (avoid clipping)
-```
-
-#### **Editing Workflow**
-```
-1. Import and organize files
-2. Rough cut to remove mistakes
-3. Clean up audio with AI enhancement
-4. Add music and sound effects
-5. Mix levels and apply compression
-6. Master for consistent loudness
-7. Export in multiple formats
-```
-
-#### **Audio Quality Standards**
-```
-- Sample Rate: 44.1kHz minimum, 48kHz recommended
-- Bit Depth: 16-bit minimum, 24-bit for editing
-- Loudness: -16 to -20 LUFS for podcasts
-- Dynamic Range: 6-12dB for speech
-- Stereo: Mono for speech, stereo for music
-```
-
-### **Performance Optimization**
-
-#### **Project Organization**
-```
-- Use descriptive file names
-- Organize tracks logically
-- Group related clips
-- Use consistent naming conventions
-- Save regularly
-```
-
-#### **System Resources**
-```
-- Close unnecessary applications
-- Use SSD for better performance
-- Ensure 8GB+ RAM
-- Keep browser updated
-- Use wired internet for AI features
-```
+### Right-Click Context Menu
+* **Right-click on a track**: Opens a menu with **"Paste here"** (places the copied clip at the clicked position).
+* **Right-click on a clip**: Opens a menu with **"Copy clip"** and **"Delete clip"**.
 
 ---
 
-## 🎯 **Quick Start Checklist**
+## 💾 5. Project Persistence & Crash Recovery
 
-### **First Podcast Session**
-- [ ] Create new project
-- [ ] Import voice recording
-- [ ] Place on Voice track
-- [ ] Add background music
-- [ ] Adjust volume levels
-- [ ] Apply AI enhancement
-- [ ] Export as MP3
+### Saving Projects
+* Press `Ctrl + S` or click **"Save"** in the header.
+* Projects are stored as `.json` files referencing audio file paths on your computer.
+* If you modify a project, the title bar shows an unsaved marker and closing the window triggers a confirmation dialog to prevent accidental data loss.
 
-### **Advanced Production**
-- [ ] Set up multi-track recording
-- [ ] Use compression on voice
-- [ ] Apply ducking automation
-- [ ] Add sound effects
-- [ ] Use stem export for mixing
-- [ ] Master with broadcast standards
+### Automatic Crash Recovery
+* Every 60 seconds, if unsaved changes exist, an automatic recovery snapshot is written to your secure `userData` directory.
+* If your computer loses power or the application closes unexpectedly, relaunching the app will prompt:  
+  *"An automatic backup with unsaved changes was found. Do you want to recover it?"*
+* Clicking **Recover** restores your clips, timeline layout, and audio files exactly as they were.
 
 ---
 
-## 📞 **Support & Resources**
+## 📤 6. Exporting Your Podcast
 
-### **Getting Help**
-- **Documentation**: This user guide
-- **Changelog**: Version history and updates
-- **Regression Testing**: Quality assurance procedures
-- **GitHub Issues**: Bug reports and feature requests
-
-### **Community Resources**
-- **Tutorials**: Step-by-step video guides (future)
-- **Templates**: Pre-built project templates
-- **Presets**: Community-shared effect chains
-- **Forum**: User discussion and tips
-
-### **System Requirements**
-```
-Minimum:
-- Chrome 100+
-- 4GB RAM
-- 1GB storage
-- Broadband internet
-
-Recommended:
-- Chrome 120+
-- 8GB RAM
-- SSD storage
-- Stable internet
-```
-
----
-
-## 🔄 **Version Updates**
-
-### **Staying Current**
-- Check for updates on application start
-- Review changelog for new features
-- Backup projects before major updates
-- Test new features on copy projects first
-
-### **Migration Guide**
-```
-From v0.4.x to v0.5.0:
-- Projects load automatically
-- New features available immediately
-- Performance improvements included
-- AI features require internet connection
-```
-
----
-
-## 🎉 **Congratulations!**
-
-You're now ready to create professional podcasts with Runtime Radio Podcast Toolkit. Remember:
-
-- **Start Simple**: Master basic editing before advanced features
-- **Use AI Wisely**: AI enhances, doesn't replace, your creative decisions
-- **Save Often**: Regular backups prevent lost work
-- **Learn Gradually**: Each project teaches new techniques
-- **Have Fun**: Podcasting should be enjoyable!
-
-**Happy podcasting! 🎙️✨**
-
----
-
-**Runtime Radio Podcast Toolkit v1.0.0 "The Sonic Generational Evolution"**
-**Created by Simone Pizzi**
-**Documentation Version: 1.1**
-**Last Updated: 2025-09-25**
+1. Set the desired playback mix using track volumes and mastering presets.
+2. Select your export format in the header dropdown:
+   * **WAV**: 16-bit uncompressed broadcast PCM audio (highest fidelity).
+   * **MP3**: High-quality compressed audio (192 kbps, stereo) encoded via background Web Worker.
+3. Click **"Export"** (or press `Ctrl + E`).
+4. Choose the destination folder and filename in the native Windows Save dialog.
+5. The audio is rendered offline and normalized with **−1 dBFS** peak headroom to ensure compliance across all major podcast platforms.

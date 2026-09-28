@@ -52,6 +52,9 @@ export interface AppState {
   addClip: (trackId: string, clip: AudioClip) => void;
   updateClip: (clipId: string, updates: Partial<AudioClip>) => void;
   deleteClip: (clipId: string) => void;
+  splitClip: (clipId: string, time: number) => boolean;
+  renameTrack: (trackId: string, name: string) => void;
+  renameProject: (name: string) => void;
   addFiles: (files: AudioFile[]) => void;
   deleteFile: (fileId: string) => void;
 }
@@ -237,6 +240,77 @@ export const useAppStore = create<AppState>()(
       if (selectedItem?.type === 'clip' && selectedItem.id === clipId) {
         set({ selectedItem: null });
       }
+    },
+
+    splitClip: (clipId, time) => {
+      const { project, saveToHistory, updateProject } = get();
+      if (!project) return false;
+
+      let targetTrack: Track | undefined;
+      let targetClip: AudioClip | undefined;
+
+      for (const track of project.tracks) {
+        const found = track.clips.find(c => c.id === clipId);
+        if (found) {
+          targetTrack = track;
+          targetClip = found;
+          break;
+        }
+      }
+
+      if (!targetTrack || !targetClip) return false;
+
+      // Minimum clip length 0.05s to avoid accidental slivers
+      const minSegment = 0.05;
+      if (time <= targetClip.startTime + minSegment || time >= targetClip.startTime + targetClip.duration - minSegment) {
+        return false;
+      }
+
+      saveToHistory();
+
+      const splitOffset = time - targetClip.startTime;
+      const firstClip: AudioClip = {
+        ...targetClip,
+        duration: splitOffset,
+        fadeOut: undefined,
+      };
+
+      const secondClip: AudioClip = {
+        id: newId('clip'),
+        fileId: targetClip.fileId,
+        trackId: targetTrack.id,
+        startTime: time,
+        duration: targetClip.duration - splitOffset,
+        offset: targetClip.offset + splitOffset,
+        isLooped: false,
+        fadeIn: undefined,
+        fadeOut: targetClip.fadeOut,
+      };
+
+      updateProject(p => ({
+        ...p,
+        tracks: p.tracks.map(track => {
+          if (track.id !== targetTrack!.id) return track;
+          const clips = track.clips.flatMap(c => (c.id === clipId ? [firstClip, secondClip] : [c]));
+          return { ...track, clips };
+        }),
+      }));
+
+      return true;
+    },
+
+    renameTrack: (trackId, name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      get().saveToHistory();
+      get().updateTrack(trackId, { name: trimmed });
+    },
+
+    renameProject: (name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      get().saveToHistory();
+      get().updateProject(p => ({ ...p, name: trimmed }));
     },
 
     addFiles: (files) => {

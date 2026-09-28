@@ -217,6 +217,56 @@ const Editor: React.FC<EditorProps> = ({
     // Keyboard shortcuts
     const keyboardShortcuts: KeyboardShortcut[] = useMemo(() => [
         {
+            key: ' ',
+            action: () => {
+                audioActions.playPause();
+            },
+            description: 'Play / Pause'
+        },
+        {
+            key: 's',
+            action: () => {
+                const selected = useAppStore.getState().selectedItem;
+                if (selected?.type === 'clip') {
+                    useAppStore.getState().splitClip(selected.id, audioActions.getCurrentTime());
+                }
+            },
+            description: 'Split clip at playhead'
+        },
+        {
+            key: 's',
+            ctrlKey: true,
+            action: () => {
+                onSaveProject();
+            },
+            description: 'Save project'
+        },
+        {
+            key: 'z',
+            ctrlKey: true,
+            action: () => {
+                useAppStore.getState().undo();
+            },
+            description: 'Undo'
+        },
+        {
+            key: 'y',
+            ctrlKey: true,
+            action: () => {
+                useAppStore.getState().redo();
+            },
+            description: 'Redo'
+        },
+        {
+            key: 'z',
+            ctrlKey: true,
+            shiftKey: true,
+            action: () => {
+                useAppStore.getState().redo();
+            },
+            description: 'Redo'
+        },
+        {
             key: 'c',
             ctrlKey: true,
             action: () => {
@@ -248,7 +298,7 @@ const Editor: React.FC<EditorProps> = ({
             },
             description: 'Delete selected clip'
         }
-    ], [handleCopyClip, handlePasteClip, deleteClip, clipboard.hasClipboardContent, audioActions]);
+    ], [handleCopyClip, handlePasteClip, deleteClip, clipboard.hasClipboardContent, audioActions, onSaveProject]);
 
     useKeyboardShortcuts(keyboardShortcuts);
 
@@ -261,8 +311,19 @@ const Editor: React.FC<EditorProps> = ({
             onDragEnd={handleDragEnd}
         >
             <div className="flex flex-col h-screen bg-gray-900 overflow-hidden">
-                <header className="bg-gray-800 p-2 border-b border-gray-700 flex items-center justify-between">
-                    <h1 className="text-xl font-bold text-purple-400">{APP_NAME}</h1>
+                <header className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-xl font-bold text-purple-400">{APP_NAME}</h1>
+                        <span className="text-gray-600">/</span>
+                        <input
+                            type="text"
+                            value={project.name}
+                            onChange={(e) => useAppStore.getState().renameProject(e.target.value)}
+                            placeholder={t('transport.untitled')}
+                            aria-label={t('transport.projectName')}
+                            className="bg-transparent hover:bg-gray-700/60 focus:bg-gray-950 focus:ring-1 focus:ring-purple-500 px-2 py-0.5 rounded text-sm text-gray-200 font-semibold transition-colors border border-transparent hover:border-gray-600 focus:border-purple-500 max-w-[220px] truncate"
+                        />
+                    </div>
                     <TransportControls
                         isPlaying={audioState.isPlaying}
                         onPlayPause={audioActions.playPause}
@@ -274,6 +335,7 @@ const Editor: React.FC<EditorProps> = ({
                         currentMastering={project.mastering}
                         exportFormat={exportFormat}
                         onExportFormatChange={onExportFormatChange}
+                        onMeterUpdate={audioActions.onMeterUpdate}
                     />
                 </header>
                 <div className="flex flex-1 overflow-hidden">

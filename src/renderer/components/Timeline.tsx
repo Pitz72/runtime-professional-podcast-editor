@@ -7,6 +7,7 @@ import TimelineRuler from './TimelineRuler';
 import Clip from './Clip';
 import ContextMenu, { ContextMenuState } from './ContextMenu';
 import { useT } from '../i18n';
+import { useAppStore } from '../store';
 import { getSnapTargets, snapTime, clampToFreeSpace, maxEndBeforeNextClip, minStartAfterPreviousClip, SNAP_THRESHOLD_PX } from '../services/timelineUtils';
 
 const DroppableTrack: React.FC<{ track: Track; children: React.ReactNode; onContextMenu: (e: React.MouseEvent) => void }> = ({ track, children, onContextMenu }) => {
@@ -102,6 +103,8 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
   const contentRef = useRef<HTMLDivElement>(null);
   const [interaction, setInteraction] = useState<Interaction | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
+  const [editingTrackName, setEditingTrackName] = useState<string>('');
 
   const totalDuration = Math.max(60, ...project.tracks.flatMap(t => t.clips.map(c => c.startTime + c.duration)));
 
@@ -162,10 +165,23 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
     e.preventDefault();
     e.stopPropagation();
     onSelectItem({ type: 'clip', id: clipId });
+
+    const currentTime = getCurrentTime();
+    const track = project.tracks.find(t => t.clips.some(c => c.id === clipId));
+    const clip = track?.clips.find(c => c.id === clipId);
+    const canSplit = Boolean(clip && currentTime > clip.startTime + 0.05 && currentTime < (clip.startTime + clip.duration - 0.05));
+
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
       items: [
+        {
+          label: t('timeline.splitClip'),
+          disabled: !canSplit,
+          onClick: () => {
+            useAppStore.getState().splitClip(clipId, currentTime);
+          },
+        },
         { label: t('timeline.copyClip'), onClick: () => onCopyClip(clipId) },
         { label: t('timeline.deleteClip'), danger: true, onClick: () => onDeleteClip(clipId) },
       ],
@@ -269,7 +285,7 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
   return (
     <div className="flex-1 flex flex-col bg-gray-800/50 p-4 space-y-2 overflow-auto" ref={timelineContainerRef}>
       <div className="sticky top-0 z-20 bg-gray-800/50 py-2">
-        <TimelineRuler duration={totalDuration} pixelsPerSecond={pixelsPerSecond} />
+        <TimelineRuler duration={totalDuration} pixelsPerSecond={pixelsPerSecond} onSeek={onSeek} />
       </div>
       <div className="relative" style={{ width: `${totalDuration * pixelsPerSecond}px` }} ref={contentRef}>
         {project.tracks.map(track => (
@@ -280,15 +296,94 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
               ${selectedItem?.type === 'track' && selectedItem.id === track.id ? 'border-purple-500 bg-purple-900/20' : 'border-transparent'}
             `}
           >
-            <div className="flex items-center bg-gray-700 p-2 rounded-t-md cursor-pointer" onClick={() => onSelectItem({ type: 'track', id: track.id })}>
+            <div className="flex items-center bg-gray-700 px-3 py-1.5 rounded-t-md cursor-pointer select-none" onClick={() => onSelectItem({ type: 'track', id: track.id })}>
               <span className={`mr-2 p-1 rounded ${TRACK_META[track.kind].color}`}>
                 {TRACK_META[track.kind].icon}
               </span>
-              <span className="font-bold flex-1">{track.name}</span>
+              {editingTrackId === track.id ? (
+                <input
+                  type="text"
+                  autoFocus
+                  value={editingTrackName}
+                  onChange={(e) => setEditingTrackName(e.target.value)}
+                  onBlur={() => {
+                    const trimmed = editingTrackName.trim();
+                    if (trimmed) {
+                      useAppStore.getState().renameTrack(track.id, trimmed);
+                    }
+                    setEditingTrackId(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const trimmed = editingTrackName.trim();
+                      if (trimmed) {
+                        useAppStore.getState().renameTrack(track.id, trimmed);
+                      }
+                      setEditingTrackId(null);
+                    } else if (e.key === 'Escape') {
+                      setEditingTrackId(null);
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-gray-800 text-white font-bold px-1.5 py-0.5 rounded border border-purple-500 flex-1 mr-2 text-sm focus:outline-none"
+                />
+              ) : (
+                <span
+                  className="font-bold flex-1 truncate mr-2 hover:text-purple-300"
+                  title={t('timeline.renameTrack')}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingTrackId(track.id);
+                    setEditingTrackName(track.name);
+                  }}
+                >
+                  {track.name}
+                </span>
+              )}
+              <div className="flex items-center mr-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateProject(p => ({
+                      ...p,
+                      tracks: p.tracks.map(t => t.id === track.id ? { ...t, isMuted: !t.isMuted } : t)
+                    }));
+                  }}
+                  className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-colors mr-1 ${
+                    track.isMuted
+                      ? 'bg-red-600 text-white shadow'
+                      : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-600'
+                  }`}
+                  aria-label={track.isMuted ? t('timeline.unmute') : t('timeline.mute')}
+                  title={track.isMuted ? t('timeline.unmute') : t('timeline.mute')}
+                >
+                  M
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateProject(p => ({
+                      ...p,
+                      tracks: p.tracks.map(t => t.id === track.id ? { ...t, isSolo: !t.isSolo } : t)
+                    }));
+                  }}
+                  className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-colors ${
+                    track.isSolo
+                      ? 'bg-yellow-500 text-black shadow font-extrabold'
+                      : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-600'
+                  }`}
+                  aria-label={track.isSolo ? t('timeline.unsolo') : t('timeline.solo')}
+                  title={track.isSolo ? t('timeline.unsolo') : t('timeline.solo')}
+                >
+                  S
+                </button>
+              </div>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDeleteTrack(track.id)
+                  onDeleteTrack(track.id);
                 }}
                 className="p-1 text-gray-400 hover:text-white hover:bg-red-500 rounded"
                 aria-label={t('timeline.deleteTrack', { name: track.name })}

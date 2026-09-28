@@ -40,11 +40,41 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300">{t('properties.volume')}</label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-sm font-medium text-gray-300">{t('properties.volume')}</label>
+              <span className="text-xs text-gray-400">{Math.round(track.volume * 100)}%</span>
+            </div>
             <input type="range" min="0" max="1" step="0.01" value={track.volume}
               className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+              onMouseDown={() => saveToHistory()}
               onChange={(e) => updateTrack(trackId, { volume: parseFloat(e.target.value) })}
             />
+          </div>
+          <div className="flex items-center gap-4 pt-1">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!track.isMuted}
+                className="h-4 w-4 text-red-600 bg-gray-800 border-gray-600 rounded focus:ring-red-500"
+                onChange={e => {
+                  saveToHistory();
+                  updateTrack(trackId, { isMuted: e.target.checked });
+                }}
+              />
+              <span className="text-sm text-gray-300">{t('properties.mute')}</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!track.isSolo}
+                className="h-4 w-4 text-yellow-500 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500"
+                onChange={e => {
+                  saveToHistory();
+                  updateTrack(trackId, { isSolo: e.target.checked });
+                }}
+              />
+              <span className="text-sm text-gray-300">{t('properties.solo')}</span>
+            </label>
           </div>
         </div>
 
@@ -115,6 +145,41 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedItem, project
           <p><span className="font-semibold text-gray-300">{t('properties.startTime')}:</span> {clip.startTime.toFixed(2)}s</p>
           <p><span className="font-semibold text-gray-300">{t('properties.duration')}:</span> {clip.duration.toFixed(2)}s</p>
           <p><span className="font-semibold text-gray-300">{t('properties.track')}:</span> <span className="truncate">{trackOfClip.name}</span></p>
+        </div>
+
+        <div className="mt-4 border-t border-gray-600 pt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">{t('properties.fadeIn')}</label>
+            <input
+              type="number"
+              min="0"
+              max={clip.duration / 2}
+              step="0.1"
+              value={clip.fadeIn ?? 0}
+              className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-xs"
+              onFocus={() => saveToHistory()}
+              onChange={e => {
+                const val = parseFloat(e.target.value);
+                updateClip(clipId, { fadeIn: isNaN(val) || val <= 0 ? undefined : Math.min(clip.duration / 2, val) });
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">{t('properties.fadeOut')}</label>
+            <input
+              type="number"
+              min="0"
+              max={clip.duration / 2}
+              step="0.1"
+              value={clip.fadeOut ?? 0}
+              className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-xs"
+              onFocus={() => saveToHistory()}
+              onChange={e => {
+                const val = parseFloat(e.target.value);
+                updateClip(clipId, { fadeOut: isNaN(val) || val <= 0 ? undefined : Math.min(clip.duration / 2, val) });
+              }}
+            />
+          </div>
         </div>
 
         {(trackOfClip.kind === TrackKind.Music || trackOfClip.kind === TrackKind.Background) && (

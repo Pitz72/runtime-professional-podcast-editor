@@ -65,6 +65,24 @@ const Clip: React.FC<ClipProps> = ({ clip, file, isSelected, pixelsPerSecond, on
         </div>
       )}
 
+      {/* Visual Fade In overlay */}
+      {clip.fadeIn && clip.fadeIn > 0 ? (
+        <div
+          className="absolute left-0 top-0 bottom-0 pointer-events-none bg-gradient-to-r from-black/60 to-transparent z-10"
+          style={{ width: `${Math.min(clip.fadeIn * pixelsPerSecond, clip.duration * pixelsPerSecond)}px` }}
+          title={`Fade In: ${clip.fadeIn.toFixed(2)}s`}
+        />
+      ) : null}
+
+      {/* Visual Fade Out overlay */}
+      {clip.fadeOut && clip.fadeOut > 0 ? (
+        <div
+          className="absolute right-0 top-0 bottom-0 pointer-events-none bg-gradient-to-l from-black/60 to-transparent z-10"
+          style={{ width: `${Math.min(clip.fadeOut * pixelsPerSecond, clip.duration * pixelsPerSecond)}px` }}
+          title={`Fade Out: ${clip.fadeOut.toFixed(2)}s`}
+        />
+      ) : null}
+
       <div
         className="absolute left-0 top-0 h-full w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-white/20 z-10"
         onMouseDown={handleResizeLeft}

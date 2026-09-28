@@ -282,4 +282,148 @@ describe('project persistence', () => {
     const parsed = parseProject(JSON.stringify(loud))
     expect(parsed.tracks[0].volume).toBe(1)
   })
+
+  it('preserves and validates fadeIn and fadeOut values', () => {
+    const withFades: Project = {
+      ...sampleProject,
+      tracks: [
+        {
+          ...sampleProject.tracks[0],
+          clips: [
+            {
+              id: 'clip-fades',
+              fileId: 'file-1',
+              trackId: 'track-1',
+              startTime: 0,
+              duration: 5,
+              offset: 0,
+              fadeIn: 0.8,
+              fadeOut: 1.2,
+            },
+          ],
+        },
+      ],
+    }
+    const json = serializeProject(withFades)
+    const parsed = parseProject(json)
+    const clip = parsed.tracks[0].clips[0]
+    expect(clip.fadeIn).toBe(0.8)
+    expect(clip.fadeOut).toBe(1.2)
+  })
+})
+
+describe('Store actions: splitClip, renameTrack, renameProject', () => {
+  it('splits a clip accurately into two non-overlapping clips', async () => {
+    const { useAppStore } = await import('../src/renderer/store')
+    const store = useAppStore.getState()
+
+    const initialProject: Project = {
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      name: 'Split Test',
+      tracks: [
+        {
+          id: 't-1',
+          name: 'Track 1',
+          kind: TrackKind.Voice,
+          volume: 1,
+          isMuted: false,
+          isSolo: false,
+          clips: [
+            {
+              id: 'c-origin',
+              fileId: 'f-1',
+              trackId: 't-1',
+              startTime: 10,
+              duration: 8,
+              offset: 2,
+              fadeIn: 0.5,
+              fadeOut: 0.5,
+            },
+          ],
+        },
+      ],
+      files: [{ id: 'f-1', name: 'audio.wav', type: 'audio/wav', duration: 20 }],
+    }
+
+    store.loadProject(initialProject, null)
+    // Split at time = 13 (3s into the 8s clip)
+    store.splitClip('c-origin', 13)
+
+    const updated = useAppStore.getState().project!
+    const clips = updated.tracks[0].clips
+    expect(clips).toHaveLength(2)
+
+    const first = clips[0]
+    const second = clips[1]
+
+    expect(first.id).toBe('c-origin')
+    expect(first.startTime).toBe(10)
+    expect(first.duration).toBe(3)
+    expect(first.offset).toBe(2)
+    expect(first.fadeIn).toBe(0.5)
+    expect(first.fadeOut).toBeUndefined() // Reset fade out on cut
+
+    expect(second.id).not.toBe('c-origin')
+    expect(second.startTime).toBe(13)
+    expect(second.duration).toBe(5)
+    expect(second.offset).toBe(5) // original offset 2 + delta 3
+    expect(second.fadeIn).toBeUndefined() // Reset fade in on cut
+    expect(second.fadeOut).toBe(0.5)
+  })
+
+  it('ignores split requests outside the clip boundaries', async () => {
+    const { useAppStore } = await import('../src/renderer/store')
+    const store = useAppStore.getState()
+
+    const project: Project = {
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      name: 'Boundary Test',
+      tracks: [
+        {
+          id: 't-1',
+          name: 'Track 1',
+          kind: TrackKind.Voice,
+          volume: 1,
+          isMuted: false,
+          isSolo: false,
+          clips: [
+            { id: 'c-1', fileId: 'f-1', trackId: 't-1', startTime: 10, duration: 8, offset: 0 },
+          ],
+        },
+      ],
+      files: [{ id: 'f-1', name: 'audio.wav', type: 'audio/wav', duration: 20 }],
+    }
+
+    store.loadProject(project, null)
+    store.splitClip('c-1', 9.9) // Before start
+    expect(useAppStore.getState().project!.tracks[0].clips).toHaveLength(1)
+
+    store.splitClip('c-1', 18.1) // After end
+    expect(useAppStore.getState().project!.tracks[0].clips).toHaveLength(1)
+  })
+
+  it('renames tracks and project and records history', async () => {
+    const { useAppStore } = await import('../src/renderer/store')
+    const store = useAppStore.getState()
+
+    const project: Project = {
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      name: 'Old Project Name',
+      tracks: [
+        { id: 't-1', name: 'Old Track', kind: TrackKind.Voice, volume: 1, isMuted: false, isSolo: false, clips: [] },
+      ],
+      files: [],
+    }
+
+    store.loadProject(project, null)
+    store.renameTrack('t-1', 'Podcast Host Mic')
+    expect(useAppStore.getState().project!.tracks[0].name).toBe('Podcast Host Mic')
+
+    store.renameProject('The Tech Broadcast Ep. 42')
+    expect(useAppStore.getState().project!.name).toBe('The Tech Broadcast Ep. 42')
+
+    // Undo should restore previous project name
+    store.undo()
+    expect(useAppStore.getState().project!.name).toBe('Old Project Name')
+  })
 })

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { AudioClip } from '@shared/types';
+import { newId } from '../store';
 
 export interface ClipboardClip extends Omit<AudioClip, 'id' | 'trackId'> {
   originalId: string;
@@ -16,6 +17,8 @@ export const useClipClipboard = () => {
       duration: clip.duration,
       offset: clip.offset,
       isLooped: clip.isLooped,
+      fadeIn: clip.fadeIn,
+      fadeOut: clip.fadeOut,
       originalId: clip.id,
       originalTrackId: clip.trackId,
     };
@@ -26,13 +29,15 @@ export const useClipClipboard = () => {
     if (!clipboard) return null;
 
     return {
-      id: `clip-${Date.now()}-${Math.random()}`,
+      id: newId('clip'),
       fileId: clipboard.fileId,
       trackId: targetTrackId,
       startTime: pasteTime,
       duration: clipboard.duration,
       offset: clipboard.offset,
       isLooped: clipboard.isLooped,
+      fadeIn: clipboard.fadeIn,
+      fadeOut: clipboard.fadeOut,
     };
   }, [clipboard]);
 

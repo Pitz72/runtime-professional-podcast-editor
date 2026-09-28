@@ -21,6 +21,8 @@ export interface AudioEngineActions {
    */
   getCurrentTime: () => number;
   onTimeUpdate: (callback: (time: number) => void) => () => void;
+  /** Subscribe to live master peak level (0.0 to 1.0) without React re-renders. */
+  onMeterUpdate: (callback: (level: number) => void) => () => void;
   /** Render the mix offline and return the encoded blob (null if the project is empty). */
   exportAudio: (format?: ExportFormat) => Promise<Blob | null>;
 }
@@ -30,6 +32,7 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
   const [isExporting, setIsExporting] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const sourceNodesRef = useRef<Map<string, AudioBufferSourceNode>>(new Map());
   const animationFrameRef = useRef<number | undefined>(undefined);
   const playbackStartTimeRef = useRef(0);
@@ -38,6 +41,7 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
   // 60fps through setState would re-render the whole editor on every frame.
   const currentTimeRef = useRef(0);
   const timeListenersRef = useRef<Set<(time: number) => void>>(new Set());
+  const meterListenersRef = useRef<Set<(level: number) => void>>(new Set());
 
   const notifyTime = useCallback((time: number) => {
     currentTimeRef.current = time;
@@ -51,6 +55,14 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
     callback(currentTimeRef.current);
     return () => {
       timeListenersRef.current.delete(callback);
+    };
+  }, []);
+
+  const onMeterUpdate = useCallback((callback: (level: number) => void) => {
+    meterListenersRef.current.add(callback);
+    callback(0);
+    return () => {
+      meterListenersRef.current.delete(callback);
     };
   }, []);
 
@@ -74,6 +86,9 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
       try { source.stop(); } catch { /* already stopped */ }
     });
     sourceNodesRef.current.clear();
+    analyserNodeRef.current = null;
+    meterListenersRef.current.forEach(listener => listener(0));
+
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = undefined;
@@ -93,12 +108,13 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
 
       const startOffset = currentTimeRef.current;
 
-      const soloTrack = project.tracks.find(t => t.isSolo);
-      const tracksToPlay = soloTrack ? [soloTrack] : project.tracks.filter(t => !t.isMuted);
+      const soloTracks = project.tracks.filter(t => t.isSolo && !t.isMuted);
+      const tracksToPlay = soloTracks.length > 0 ? soloTracks : project.tracks.filter(t => !t.isMuted);
       const totalDuration = Math.max(0, ...project.tracks.flatMap(t => t.clips.map(c => c.startTime + c.duration)));
 
-      const { sources } = buildAudioGraph(ac, project, tracksToPlay, totalDuration, startOffset);
+      const { sources, analyser } = buildAudioGraph(ac, project, tracksToPlay, totalDuration, startOffset);
       sourceNodesRef.current.clear();
+      analyserNodeRef.current = analyser;
 
       playbackStartTimeRef.current = ac.currentTime;
 
@@ -128,6 +144,19 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
       const tick = () => {
         const acNow = audioContextRef.current?.currentTime;
         if (!acNow || !animationFrameRef.current) return;
+
+        // Sample audio levels for the master meter
+        if (analyserNodeRef.current && meterListenersRef.current.size > 0) {
+          const bufferLength = analyserNodeRef.current.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+          analyserNodeRef.current.getByteTimeDomainData(dataArray);
+          let peak = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            const val = Math.abs(dataArray[i] - 128) / 128;
+            if (val > peak) peak = val;
+          }
+          meterListenersRef.current.forEach(listener => listener(peak));
+        }
 
         const newCurrentTime = startOffset + (acNow - playbackStartTimeRef.current);
 
@@ -166,8 +195,8 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
       };
 
       // Export honors solo exactly like playback does.
-      const soloTrack = project.tracks.find(t => t.isSolo);
-      const tracksToExport = soloTrack ? [soloTrack] : project.tracks.filter(t => !t.isMuted);
+      const soloTracks = project.tracks.filter(t => t.isSolo && !t.isMuted);
+      const tracksToExport = soloTracks.length > 0 ? soloTracks : project.tracks.filter(t => !t.isMuted);
 
       // Render at the highest source sample rate (44.1kHz floor, 48kHz cap)
       // instead of forcing everything down to 44.1kHz.
@@ -209,6 +238,7 @@ export const useAudioEngine = (project: Project | null): [AudioEngineState, Audi
     seek,
     getCurrentTime,
     onTimeUpdate,
+    onMeterUpdate,
     exportAudio,
   };
 

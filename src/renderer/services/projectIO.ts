@@ -89,6 +89,8 @@ export function parseProject(json: string): Project {
         duration: Math.max(0, clip.duration),
         offset: Math.max(0, clip.offset),
         isLooped: clip.isLooped === true,
+        fadeIn: isFiniteNumber(clip.fadeIn) ? Math.max(0, clip.fadeIn) : undefined,
+        fadeOut: isFiniteNumber(clip.fadeOut) ? Math.max(0, clip.fadeOut) : undefined,
       }];
     });
 

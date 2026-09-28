@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { t } from '../i18n';
 
 interface Props {
   children: ReactNode;
@@ -46,6 +47,8 @@ class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      const isDev = Boolean(import.meta.env?.DEV);
+
       return (
         <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-8">
           <div className="max-w-2xl w-full bg-gray-800 rounded-lg p-8 border border-red-500">
@@ -56,16 +59,16 @@ class ErrorBoundary extends Component<Props, State> {
                 </svg>
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-red-400">Oops! Something went wrong</h2>
-                <p className="text-gray-400">Runtime Radio encountered an unexpected error</p>
+                <h2 className="text-2xl font-bold text-red-400">{t('error.title')}</h2>
+                <p className="text-gray-400">{t('error.subtitle')}</p>
               </div>
             </div>
 
             <div className="space-y-4">
               <div className="bg-gray-900 p-4 rounded border border-gray-600">
-                <h3 className="font-semibold text-red-400 mb-2">Error Details:</h3>
+                <h3 className="font-semibold text-red-400 mb-2">{t('error.details')}</h3>
                 <p className="text-sm text-gray-300 font-mono">
-                  {this.state.error?.message || 'Unknown error'}
+                  {this.state.error?.message || t('unknownError')}
                 </p>
               </div>
 
@@ -74,20 +77,20 @@ class ErrorBoundary extends Component<Props, State> {
                   onClick={this.handleRetry}
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                 >
-                  Try Again
+                  {t('error.tryAgain')}
                 </button>
                 <button
                   onClick={() => window.location.reload()}
                   className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
                 >
-                  Reload Page
+                  {t('error.reload')}
                 </button>
               </div>
 
-              {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+              {isDev && this.state.errorInfo && (
                 <details className="mt-6">
                   <summary className="cursor-pointer text-sm text-gray-400 hover:text-gray-300">
-                    Show Error Stack (Development Only)
+                    {t('error.showStack')}
                   </summary>
                   <pre className="mt-2 p-4 bg-gray-900 rounded text-xs text-gray-300 overflow-auto max-h-64">
                     {this.state.error?.stack}

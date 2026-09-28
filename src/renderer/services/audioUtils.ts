@@ -39,6 +39,11 @@ export const buildAudioGraph = (
         masterBus.connect(context.destination);
     }
 
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+    masterBus.connect(analyser);
+
     const sources: {
         source: AudioBufferSourceNode,
         clip: {
@@ -47,13 +52,19 @@ export const buildAudioGraph = (
             startTime: number;
             duration: number;
             offset: number;
+            fadeIn?: number;
+            fadeOut?: number;
             /** Set on looped clips: length of one loop iteration in seconds. */
             loopSegmentDuration?: number;
         }
     }[] = [];
-    const voiceClips = project.tracks
-        .filter(t => t.kind === TrackKind.Voice)
-        .flatMap(t => t.clips);
+
+    // Only audible (non-muted, non-excluded by solo) voice tracks trigger ducking
+    const hasSolo = project.tracks.some(t => t.isSolo);
+    const audibleVoiceTracks = project.tracks.filter(
+        t => t.kind === TrackKind.Voice && !t.isMuted && (!hasSolo || t.isSolo)
+    );
+    const voiceClips = audibleVoiceTracks.flatMap(t => t.clips);
 
     const voiceEvents: { time: number, type: 'start' | 'end' }[] = [];
     if (voiceClips.length > 0) {
@@ -161,14 +172,66 @@ export const buildAudioGraph = (
                 } else {
                     const source = context.createBufferSource();
                     source.buffer = file.buffer;
-                    source.connect(trackHead);
+
+                    // Micro-fade and custom fade-in/fade-out via dedicated clip gain
+                    const clipGain = context.createGain();
+                    source.connect(clipGain);
+                    clipGain.connect(trackHead);
+
+                    const MICRO_FADE = 0.005; // 5ms micro-fade to eliminate clicks
+                    const fadeIn = Math.max(MICRO_FADE, clip.fadeIn ?? MICRO_FADE);
+                    const fadeOut = Math.max(MICRO_FADE, clip.fadeOut ?? MICRO_FADE);
+                    const safeFadeIn = Math.min(fadeIn, clip.duration / 2);
+                    const safeFadeOut = Math.min(fadeOut, clip.duration / 2);
+
+                    const clipStartTimeline = clip.startTime;
+                    const clipEndTimeline = clip.startTime + clip.duration;
+
+                    if (startOffset <= clipStartTimeline) {
+                        const startAt = context.currentTime + (clipStartTimeline - startOffset);
+                        const endAt = startAt + clip.duration;
+                        clipGain.gain.setValueAtTime(0, startAt);
+                        clipGain.gain.linearRampToValueAtTime(1, startAt + safeFadeIn);
+                        if (clip.duration > safeFadeIn + safeFadeOut) {
+                            clipGain.gain.setValueAtTime(1, endAt - safeFadeOut);
+                        }
+                        clipGain.gain.linearRampToValueAtTime(0, endAt);
+                    } else if (startOffset < clipEndTimeline) {
+                        const elapsed = startOffset - clipStartTimeline;
+                        const remaining = clip.duration - elapsed;
+                        const now = context.currentTime;
+                        const endAt = now + remaining;
+
+                        if (elapsed < safeFadeIn) {
+                            const initialGain = Math.max(0, elapsed / safeFadeIn);
+                            clipGain.gain.setValueAtTime(0, now);
+                            clipGain.gain.linearRampToValueAtTime(initialGain, now + MICRO_FADE);
+                            clipGain.gain.linearRampToValueAtTime(1, now + (safeFadeIn - elapsed));
+                            if (clip.duration > safeFadeIn + safeFadeOut) {
+                                clipGain.gain.setValueAtTime(1, endAt - safeFadeOut);
+                            }
+                            clipGain.gain.linearRampToValueAtTime(0, endAt);
+                        } else if (elapsed >= clip.duration - safeFadeOut) {
+                            const remainingFadeOut = clipEndTimeline - startOffset;
+                            const initialGain = Math.max(0, remainingFadeOut / safeFadeOut);
+                            clipGain.gain.setValueAtTime(0, now);
+                            clipGain.gain.linearRampToValueAtTime(initialGain, now + MICRO_FADE);
+                            clipGain.gain.linearRampToValueAtTime(0, endAt);
+                        } else {
+                            clipGain.gain.setValueAtTime(0, now);
+                            clipGain.gain.linearRampToValueAtTime(1, now + MICRO_FADE);
+                            clipGain.gain.setValueAtTime(1, endAt - safeFadeOut);
+                            clipGain.gain.linearRampToValueAtTime(0, endAt);
+                        }
+                    }
+
                     sources.push({ source, clip });
                 }
             }
         });
     });
 
-    return { sources };
+    return { sources, masterBus, analyser };
 };
 
 // File validation utilities

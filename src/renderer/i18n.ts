@@ -95,6 +95,29 @@ const en = {
   'dialog.audioFiles': 'Audio Files',
   'dialog.projectFiles': 'Project Files',
 
+  // Error Boundary
+  'error.title': 'Oops! Something went wrong',
+  'error.subtitle': 'Runtime Radio encountered an unexpected error',
+  'error.details': 'Error Details:',
+  'error.tryAgain': 'Try Again',
+  'error.reload': 'Reload App',
+  'error.showStack': 'Show Error Stack (Development Only)',
+
+  // Additional features
+  'transport.projectName': 'Project Name',
+  'transport.untitled': 'Untitled Project',
+  'properties.mute': 'Mute Track',
+  'properties.solo': 'Solo Track',
+  'properties.fadeIn': 'Fade In (s)',
+  'properties.fadeOut': 'Fade Out (s)',
+  'timeline.mute': 'Mute',
+  'timeline.unmute': 'Unmute',
+  'timeline.solo': 'Solo',
+  'timeline.unsolo': 'Unsolo',
+  'timeline.splitClip': 'Split at Playhead',
+  'timeline.splitHere': 'Split Here',
+  'timeline.renameTrack': 'Rename Track',
+
   'unknownError': 'unknown error',
 } as const;
 
@@ -186,6 +209,29 @@ const it: Record<TranslationKey, string> = {
   'dialog.importAudio': 'Importa File Audio',
   'dialog.audioFiles': 'File Audio',
   'dialog.projectFiles': 'File Progetto',
+
+  // Error Boundary
+  'error.title': 'Ops! Si è verificato un errore',
+  'error.subtitle': 'Runtime Radio ha riscontrato un errore imprevisto',
+  'error.details': 'Dettagli errore:',
+  'error.tryAgain': 'Riprova',
+  'error.reload': 'Ricarica Applicazione',
+  'error.showStack': 'Mostra traccia dello stack (Sviluppo)',
+
+  // Additional features
+  'transport.projectName': 'Nome Progetto',
+  'transport.untitled': 'Progetto senza titolo',
+  'properties.mute': 'Muta Traccia',
+  'properties.solo': 'Isola Traccia (Solo)',
+  'properties.fadeIn': 'Dissolvenza in entrata (s)',
+  'properties.fadeOut': 'Dissolvenza in uscita (s)',
+  'timeline.mute': 'Muto',
+  'timeline.unmute': 'Riattiva',
+  'timeline.solo': 'Solo',
+  'timeline.unsolo': 'Rimuovi Solo',
+  'timeline.splitClip': 'Dividi al Playhead',
+  'timeline.splitHere': 'Dividi qui',
+  'timeline.renameTrack': 'Rinomina Traccia',
 
   'unknownError': 'errore sconosciuto',
 };

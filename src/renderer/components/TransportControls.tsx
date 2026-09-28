@@ -16,7 +16,55 @@ interface TransportControlsProps {
   currentMastering?: CompressorSettings;
   exportFormat: ExportFormat;
   onExportFormatChange: (format: ExportFormat) => void;
+  onMeterUpdate?: (callback: (level: number) => void) => () => void;
 }
+
+const MasterMeter: React.FC<{
+  onMeterUpdate: (callback: (level: number) => void) => () => void;
+}> = ({ onMeterUpdate }) => {
+  const barRef = React.useRef<HTMLDivElement>(null);
+  const peakTextRef = React.useRef<HTMLSpanElement>(null);
+
+  React.useEffect(() => {
+    return onMeterUpdate((level) => {
+      if (barRef.current) {
+        const percent = Math.min(100, Math.max(0, level * 100));
+        barRef.current.style.width = `${percent}%`;
+        if (level >= 0.99) {
+          barRef.current.style.backgroundColor = '#ef4444';
+        } else if (level >= 0.8) {
+          barRef.current.style.backgroundColor = '#eab308';
+        } else {
+          barRef.current.style.backgroundColor = '#22c55e';
+        }
+      }
+      if (peakTextRef.current) {
+        if (level <= 0.0001) {
+          peakTextRef.current.textContent = '-∞ dB';
+        } else {
+          const db = 20 * Math.log10(level);
+          peakTextRef.current.textContent = `${db.toFixed(1)} dB`;
+        }
+      }
+    });
+  }, [onMeterUpdate]);
+
+  return (
+    <div className="flex flex-col justify-center w-28 h-8 px-2 py-1 bg-gray-950 border border-gray-700 rounded select-none" title="Master Peak Meter">
+      <div className="w-full h-2.5 bg-gray-800 rounded-sm overflow-hidden relative">
+        <div
+          ref={barRef}
+          className="h-full bg-green-500 transition-[width] duration-75 ease-out"
+          style={{ width: '0%' }}
+        />
+      </div>
+      <div className="flex justify-between items-center text-[9px] text-gray-400 font-mono leading-none mt-1">
+        <span>MASTER</span>
+        <span ref={peakTextRef} className="text-gray-300 font-bold">-∞ dB</span>
+      </div>
+    </div>
+  );
+};
 
 const TransportControls: React.FC<TransportControlsProps> = ({
   isPlaying,
@@ -28,7 +76,8 @@ const TransportControls: React.FC<TransportControlsProps> = ({
   isExporting,
   currentMastering,
   exportFormat,
-  onExportFormatChange
+  onExportFormatChange,
+  onMeterUpdate,
 }) => {
   const t = useT();
   const isBusy = isExporting;
@@ -63,6 +112,7 @@ const TransportControls: React.FC<TransportControlsProps> = ({
           {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
         </button>
       </div>
+      {onMeterUpdate && <MasterMeter onMeterUpdate={onMeterUpdate} />}
       <div className="flex items-center gap-2">
         <label htmlFor="mastering-preset" className="text-sm font-medium text-gray-400">{t('transport.mastering')}</label>
         <select

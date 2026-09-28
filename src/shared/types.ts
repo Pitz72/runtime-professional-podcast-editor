@@ -24,6 +24,8 @@ export interface AudioClip {
   duration: number; // in seconds
   offset: number; // start point within the original audio file
   isLooped?: boolean; // For music tracks
+  fadeIn?: number; // fade in duration in seconds
+  fadeOut?: number; // fade out duration in seconds
 }
 
 export interface CompressorSettings {

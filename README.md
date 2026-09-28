@@ -4,7 +4,7 @@
 
 # 🎙️ Runtime Radio Podcast Toolkit
 
-**Version 0.0.3 "Mestiere"**
+**Version 0.0.4 "Mestiere"**
 
 Desktop application for podcast production built with React 19, TypeScript, and Electron. Designed specifically for journalists, podcasters, and content creators to produce broadcast-quality audio locally, offline, and without audio engineering expertise.
 
@@ -23,31 +23,36 @@ The mission of Runtime Radio Podcast Toolkit is to allow anyone to create high-l
 
 ---
 
-## ✨ Features (v0.0.3)
+## ✨ Features (v0.0.4)
 
 - **🎵 Multi-Track Timeline**:
   - Drag & drop audio from the File Bin directly onto Voice, Music, Background, and FX tracks via `@dnd-kit`.
+  - **Clip Splitting**: Split clips at the playhead position using hotkey `S` or via right-click context menu (*Split at Playhead*).
+  - **Fade In / Fade Out**: Per-clip parametric fades with visual gradient overlays and 5ms anti-click micro-fades.
+  - **Track Controls**: Mute [M] and Solo [S] buttons on every track header with multi-solo support and muted-voice ducking awareness. Inline track renaming via double-click.
   - **Magnetic Snapping**: Snap to 1s grid, clip boundaries, and playhead (hold `Alt` to bypass).
   - **Anti-Overlap Engine**: Automatic placement into nearest free gaps to prevent accidental track collisions.
   - **Native Looping**: Single-node audio looping with accurate segment seek support.
-  - **Optimized Ruler**: Adaptive tick density and scale rendering.
+  - **Click-to-Seek Ruler**: Interactive ruler with adaptive tick density and instant click seek.
 - **🎚️ Audio Processing & Effects**:
   - Parametric EQ (High-pass, Low-pass, Peaking, High-shelf, Low-shelf) and dynamics compressor.
-  - **Hardware-like Ducking**: Music and background automatically duck during speech with zero-lag scheduled ramps.
+  - **Real-Time Master VU-Meter**: High-precision peak LED bar with dBFS numeric readout (zero React re-renders).
+  - **Hardware-like Ducking**: Music and background automatically duck during speech with zero-lag scheduled ramps (excludes muted voices).
   - **22 Curated Presets**: 6 voice, 8 music, and 8 mastering presets.
 - **📤 Export Engine**:
   - Offline mix rendering with background Web Worker encoding (`exportEncoder.worker.ts`) — the UI never freezes.
   - Output formats: **WAV** (lossless PCM) and **MP3** (via `lamejs`).
   - Professional peak normalization to **−1 dBFS** headroom.
 - **💾 Workspace & Desktop Integration**:
+  - **Inline Project Renaming**: Rename your project anytime directly in the top header.
   - **Crash-Recovery Slot**: Periodic autosave (`userData/autosave.json`) with startup restoration prompt.
+  - **Hardened Error Boundary**: Bilingual crash screen with zero `process.env` dependencies.
   - **Recent Projects**: Quick access to recent `.json` projects from Welcome Screen and native `File → Open Recent`.
   - **Window Memory**: Bounds and maximized state remembered between sessions.
-  - **Local Crash Log**: Uncaught exceptions logged locally to `userData/error.log`.
 - **⌨️ Shortcuts & Context Menus**:
-  - Context menu on right click: *Paste Here* on tracks; *Copy* and *Delete* on clips.
-  - Keyboard shortcuts: `Ctrl+C` (Copy), `Ctrl+V` (Paste), `Delete` (Delete clip), with input protection.
-  - System menu accelerators: `Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+E`, `Ctrl+Z`, `Ctrl+Y`.
+  - Playback: `Spacebar` (Play/Pause).
+  - Timeline: `S` (Split clip at playhead), `Ctrl+C` (Copy), `Ctrl+V` (Paste), `Delete` (Delete clip).
+  - Project: `Ctrl+S` (Save), `Ctrl+Z` (Undo), `Ctrl+Y` / `Ctrl+Shift+Z` (Redo).
 - **🌍 Internationalization (i18n)**:
   - Complete Italian and English (US) coverage across UI, toasts, dialogs, and native menus.
 
@@ -55,9 +60,6 @@ The mission of Runtime Radio Podcast Toolkit is to allow anyone to create high-l
 
 ## ⚠️ Current Limitations
 
-- **Clip Split**: Clips can currently be trimmed from both ends; splitting a clip at the playhead position (**S**) is scheduled for **v0.0.4**.
-- **Fades**: Clip fade-in/fade-out handles and automatic 5ms micro-fades are scheduled for **v0.0.4**.
-- **Mute/Solo Controls**: Implemented in engine and data model; visual [M] and [S] track buttons arrive in **v0.0.4**.
 - **Loudness Compliance**: Currently normalized to -1 dBFS peak; ITU-R BS.1770-4 (-16 LUFS) targeting arrives in **v0.1.0**.
 - **Memory Footprint**: Audio files are decoded in RAM. Best performance with files under 200MB until the streaming architecture arrives in **v0.2.0**.
 
@@ -81,13 +83,13 @@ npm run dev
 ```bash
 npm run typecheck    # TypeScript strict check (renderer + main)
 npm run lint         # ESLint (0 warnings allowed)
-npm run test:run     # Vitest automated test suite (31 tests)
+npm run test:run     # Vitest automated test suite (35 tests)
 ```
 
 ### Build Production Installer (Windows)
 ```bash
 npm run build
-# Output: builds/0.0.3/
+# Output: builds/0.0.4/
 ```
 
 ---

@@ -2,7 +2,7 @@ import React from 'react';
 import { Track, TrackKind } from '@shared/types';
 import { MusicIcon, MicIcon, SoundHighIcon, FXIcon } from './components/icons';
 
-export const APP_VERSION = '0.0.3';
+export const APP_VERSION = '0.0.4';
 export const APP_VERSION_NAME = 'Mestiere';
 export const APP_AUTHOR = 'Simone Pizzi';
 export const APP_NAME = 'Runtime Radio Podcast Toolkit';

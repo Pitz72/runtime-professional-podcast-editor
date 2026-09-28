@@ -188,7 +188,7 @@ const App: React.FC = () => {
   }, [handleNewProject, handleOpenProject, handleOpenRecent, handleSaveProject, handleExportAudio, undo, redo]);
 
   return (
-    <div className="h-screen w-screen bg-gray-900 text-gray-200 flex flex-col overflow-hidden">
+    <div className="h-screen w-screen bg-slate-950 text-slate-100 flex flex-col overflow-hidden">
       {project ? (
         <Editor
           audioState={audioState}

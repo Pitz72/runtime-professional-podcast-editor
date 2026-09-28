@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Project, Track, TrackKind, SelectedItem } from '@shared/types';
 import { TRACK_META, ZOOM_LEVELS } from '../constants';
-import { PlusCircleIcon, CloseIcon, ZoomInIcon, ZoomOutIcon } from './icons';
+import { PlusCircleIcon, CloseIcon, ZoomInIcon, ZoomOutIcon, VolumeIcon, DuckingIcon } from './icons';
 import { useDroppable } from '@dnd-kit/core';
 import TimelineRuler from './TimelineRuler';
 import Clip from './Clip';
@@ -20,9 +20,18 @@ const DroppableTrack: React.FC<{ track: Track; children: React.ReactNode; onCont
     <div
       id={`track-${track.id}`}
       ref={setNodeRef}
-      className={`h-24 bg-gray-900/50 rounded-b-md relative ${isOver ? 'ring-2 ring-purple-500 ring-inset' : ''}`}
+      className={`h-[86px] bg-slate-950/70 border-t border-slate-800/80 rounded-b-lg relative transition-all ${
+        isOver ? 'ring-2 ring-purple-500/80 bg-purple-950/20 shadow-inner' : ''
+      }`}
       onContextMenu={onContextMenu}
     >
+      {track.clips.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-600/70 text-xs italic tracking-wider">
+          <span className="px-3 py-1 rounded border border-dashed border-slate-800/80 bg-slate-950/50">
+            Trascina qui un file audio per questa traccia
+          </span>
+        </div>
+      )}
       {children}
     </div>
   );
@@ -51,10 +60,11 @@ const Playhead: React.FC<{
   return (
     <div
       ref={ref}
-      className="absolute top-0 left-0 w-0.5 h-full bg-red-500 z-30 cursor-ew-resize"
+      className="absolute top-0 left-0 w-[2px] h-full bg-rose-500 z-30 cursor-ew-resize shadow-[0_0_8px_rgba(244,63,94,0.9)]"
       onMouseDown={onMouseDown}
     >
-      <div className="absolute -top-4 -left-1.5 w-4 h-4 bg-red-500 rounded-full"></div>
+      {/* Top Playhead Marker Handle */}
+      <div className="absolute -top-3.5 -left-[7px] w-4 h-4 bg-rose-500 rounded-sm rotate-45 border border-white/80 shadow-md pointer-events-auto hover:scale-110 transition-transform" />
     </div>
   );
 };
@@ -283,8 +293,8 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
 
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-800/50 p-4 space-y-2 overflow-auto" ref={timelineContainerRef}>
-      <div className="sticky top-0 z-20 bg-gray-800/50 py-2">
+    <div className="flex-1 flex flex-col bg-slate-950/80 p-4 space-y-3 overflow-auto" ref={timelineContainerRef}>
+      <div className="sticky top-0 z-20 bg-slate-950/95 backdrop-blur-md py-1 border-b border-slate-800/80 shadow-sm">
         <TimelineRuler duration={totalDuration} pixelsPerSecond={pixelsPerSecond} onSeek={onSeek} />
       </div>
       <div className="relative" style={{ width: `${totalDuration * pixelsPerSecond}px` }} ref={contentRef}>
@@ -292,14 +302,22 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
           <div
             key={track.id}
             className={`
-              mb-2 rounded-lg border
-              ${selectedItem?.type === 'track' && selectedItem.id === track.id ? 'border-purple-500 bg-purple-900/20' : 'border-transparent'}
+              mb-3 rounded-lg border transition-all shadow-md
+              ${selectedItem?.type === 'track' && selectedItem.id === track.id ? 'border-purple-500/80 bg-purple-950/20 shadow-purple-500/10' : 'border-slate-800/90 bg-slate-900/70'}
             `}
           >
-            <div className="flex items-center bg-gray-700 px-3 py-1.5 rounded-t-md cursor-pointer select-none" onClick={() => onSelectItem({ type: 'track', id: track.id })}>
-              <span className={`mr-2 p-1 rounded ${TRACK_META[track.kind].color}`}>
+            {/* DAW Channel Strip Header */}
+            <div
+              className="flex items-center bg-slate-900/95 border-b border-slate-800/80 px-3 py-2 rounded-t-lg cursor-pointer select-none"
+              onClick={() => onSelectItem({ type: 'track', id: track.id })}
+            >
+              {/* Kind Badge */}
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold mr-2.5 ${TRACK_META[track.kind].color} text-white shadow-sm flex-shrink-0`}>
                 {TRACK_META[track.kind].icon}
-              </span>
+                <span className="uppercase text-[9px] tracking-wider">{track.kind}</span>
+              </div>
+
+              {/* Editable Name */}
               {editingTrackId === track.id ? (
                 <input
                   type="text"
@@ -325,12 +343,12 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
                     }
                   }}
                   onClick={(e) => e.stopPropagation()}
-                  className="bg-gray-800 text-white font-bold px-1.5 py-0.5 rounded border border-purple-500 flex-1 mr-2 text-sm focus:outline-none"
+                  className="bg-slate-950 text-white font-bold px-2 py-0.5 rounded border border-purple-500 flex-1 mr-2 text-xs focus:outline-none"
                 />
               ) : (
                 <span
-                  className="font-bold flex-1 truncate mr-2 hover:text-purple-300"
-                  title={t('timeline.renameTrack')}
+                  className="font-bold flex-1 truncate mr-2 text-xs text-slate-200 hover:text-purple-300 transition-colors"
+                  title={`${t('timeline.renameTrack')} (Doppio clic)`}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
                     setEditingTrackId(track.id);
@@ -340,7 +358,42 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
                   {track.name}
                 </span>
               )}
-              <div className="flex items-center mr-2">
+
+              {/* Ducking Active Indicator */}
+              {track.isDuckingEnabled && (
+                <span className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-700/50 mr-2 shadow-sm" title="Ducking attivo: abbassa il volume durante la voce">
+                  <DuckingIcon className="w-3 h-3 text-indigo-400" />
+                  <span>DUCK</span>
+                </span>
+              )}
+
+              {/* Quick Channel Fader */}
+              <div
+                className="hidden md:flex items-center gap-1.5 mr-3 bg-slate-950/60 border border-slate-800 px-2 py-0.5 rounded"
+                onClick={e => e.stopPropagation()}
+                title={`Volume: ${Math.round(track.volume * 100)}%`}
+              >
+                <VolumeIcon className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.02"
+                  value={track.volume}
+                  onMouseDown={() => useAppStore.getState().saveToHistory()}
+                  onChange={(e) => updateProject(p => ({
+                    ...p,
+                    tracks: p.tracks.map(t => t.id === track.id ? { ...t, volume: parseFloat(e.target.value) } : t)
+                  }))}
+                  className="w-14 h-1"
+                />
+                <span className="text-[10px] font-mono text-slate-400 w-6 text-right tabular-nums">
+                  {Math.round(track.volume * 100)}%
+                </span>
+              </div>
+
+              {/* Mute and Solo Hardware-Style Buttons */}
+              <div className="flex items-center mr-2 gap-1">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -350,10 +403,10 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
                       tracks: p.tracks.map(t => t.id === track.id ? { ...t, isMuted: !t.isMuted } : t)
                     }));
                   }}
-                  className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-colors mr-1 ${
+                  className={`w-6 h-6 flex items-center justify-center text-[10px] font-bold rounded transition-all ${
                     track.isMuted
-                      ? 'bg-red-600 text-white shadow'
-                      : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-600'
+                      ? 'bg-red-600 text-white shadow-md shadow-red-600/50 border border-red-400'
+                      : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 border border-slate-700'
                   }`}
                   aria-label={track.isMuted ? t('timeline.unmute') : t('timeline.mute')}
                   title={track.isMuted ? t('timeline.unmute') : t('timeline.mute')}
@@ -369,10 +422,10 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
                       tracks: p.tracks.map(t => t.id === track.id ? { ...t, isSolo: !t.isSolo } : t)
                     }));
                   }}
-                  className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-colors ${
+                  className={`w-6 h-6 flex items-center justify-center text-[10px] font-bold rounded transition-all ${
                     track.isSolo
-                      ? 'bg-yellow-500 text-black shadow font-extrabold'
-                      : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-600'
+                      ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/50 font-black border border-amber-200'
+                      : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 border border-slate-700'
                   }`}
                   aria-label={track.isSolo ? t('timeline.unsolo') : t('timeline.solo')}
                   title={track.isSolo ? t('timeline.unsolo') : t('timeline.solo')}
@@ -380,17 +433,21 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
                   S
                 </button>
               </div>
+
+              {/* Delete Track */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onDeleteTrack(track.id);
                 }}
-                className="p-1 text-gray-400 hover:text-white hover:bg-red-500 rounded"
+                className="p-1 text-slate-400 hover:text-white hover:bg-red-500/80 rounded transition-colors"
                 aria-label={t('timeline.deleteTrack', { name: track.name })}
               >
-                <CloseIcon className="w-4 h-4" />
+                <CloseIcon className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            {/* Droppable Clip Lane */}
             <DroppableTrack
               track={track}
               onContextMenu={(e) => openTrackContextMenu(track, e)}
@@ -402,6 +459,7 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
                     key={clip.id}
                     clip={clip}
                     file={file}
+                    trackKind={track.kind}
                     pixelsPerSecond={pixelsPerSecond}
                     isSelected={selectedItem?.type === 'clip' && selectedItem.id === clip.id}
                     onSelect={onSelectItem}
@@ -419,20 +477,44 @@ const Timeline: React.FC<TimelineProps> = ({ project, updateProject, onInteracti
           onMouseDown={handlePlayheadInteraction}
         />
       </div>
-      <div className="pt-4 flex justify-center gap-4 items-center">
-        <button onClick={() => onAddTrack(TrackKind.Voice)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-md text-sm">
-          <PlusCircleIcon className="w-4 h-4" /> {t('timeline.addVoiceTrack')}
-        </button>
-        <button onClick={() => onAddTrack(TrackKind.Music)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-md text-sm">
-          <PlusCircleIcon className="w-4 h-4" /> {t('timeline.addMusicTrack')}
-        </button>
+
+      {/* Timeline Bottom Toolbar */}
+      <div className="pt-3 pb-1 flex justify-between items-center px-2">
         <div className="flex items-center gap-2">
-          <button onClick={() => onZoomChange(Math.max(0, zoomIndex - 1))} disabled={zoomIndex === 0} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded-md disabled:opacity-50">
-            <ZoomOutIcon className="w-4 h-4" />
+          <button
+            onClick={() => onAddTrack(TrackKind.Voice)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-emerald-500/50 text-slate-200 hover:text-white rounded-md text-xs font-semibold shadow-sm transition-all"
+          >
+            <PlusCircleIcon className="w-3.5 h-3.5 text-emerald-400" /> {t('timeline.addVoiceTrack')}
           </button>
-          <span className="text-xs text-gray-400 w-12 text-center">{t('timeline.zoom')}</span>
-          <button onClick={() => onZoomChange(Math.min(ZOOM_LEVELS.length - 1, zoomIndex + 1))} disabled={zoomIndex === ZOOM_LEVELS.length - 1} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded-md disabled:opacity-50">
-            <ZoomInIcon className="w-4 h-4" />
+          <button
+            onClick={() => onAddTrack(TrackKind.Music)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-purple-500/50 text-slate-200 hover:text-white rounded-md text-xs font-semibold shadow-sm transition-all"
+          >
+            <PlusCircleIcon className="w-3.5 h-3.5 text-purple-400" /> {t('timeline.addMusicTrack')}
+          </button>
+        </div>
+
+        {/* Zoom Controls */}
+        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-2 py-1 rounded-md shadow-sm">
+          <button
+            onClick={() => onZoomChange(Math.max(0, zoomIndex - 1))}
+            disabled={zoomIndex === 0}
+            className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-40 transition-colors"
+            title="Riduci zoom"
+          >
+            <ZoomOutIcon className="w-3.5 h-3.5" />
+          </button>
+          <span className="text-[11px] font-mono text-slate-300 w-12 text-center select-none font-medium">
+            {ZOOM_LEVELS[zoomIndex]} px/s
+          </span>
+          <button
+            onClick={() => onZoomChange(Math.min(ZOOM_LEVELS.length - 1, zoomIndex + 1))}
+            disabled={zoomIndex === ZOOM_LEVELS.length - 1}
+            className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-40 transition-colors"
+            title="Aumenta zoom"
+          >
+            <ZoomInIcon className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

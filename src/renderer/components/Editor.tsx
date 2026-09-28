@@ -4,7 +4,7 @@ import PropertiesPanel from './PropertiesPanel';
 import Timeline from './Timeline';
 import TransportControls from './TransportControls';
 import { AudioFile, Track, AudioClip, CompressorSettings } from '@shared/types';
-import { ZOOM_LEVELS, APP_NAME } from '../constants';
+import { ZOOM_LEVELS } from '../constants';
 import { MASTERING_PRESETS } from '../presets';
 import { useAppStore, newId } from '../store';
 import { AudioEngineState, AudioEngineActions } from '../hooks/useAudioEngine';
@@ -14,6 +14,7 @@ import { validateAudioFile, ExportFormat } from '../services/audioUtils';
 import { getSnapTargets, snapTime, clampToFreeSpace, SNAP_THRESHOLD_PX } from '../services/timelineUtils';
 import { notify } from './Toast';
 import { t } from '../i18n';
+import { UndoIcon, RedoIcon } from './icons';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors, defaultDropAnimationSideEffects } from '@dnd-kit/core';
 
 interface EditorProps {
@@ -54,6 +55,11 @@ const Editor: React.FC<EditorProps> = ({
     const deleteClip = useAppStore(s => s.deleteClip);
     const addFiles = useAppStore(s => s.addFiles);
     const deleteFile = useAppStore(s => s.deleteFile);
+    const isDirty = useAppStore(s => s.isDirty);
+    const canUndo = useAppStore(s => s.canUndo);
+    const canRedo = useAppStore(s => s.canRedo);
+    const undo = useAppStore(s => s.undo);
+    const redo = useAppStore(s => s.redo);
 
     const pixelsPerSecond = ZOOM_LEVELS[zoomIndex];
     const clipboard = useClipClipboard();
@@ -310,20 +316,64 @@ const Editor: React.FC<EditorProps> = ({
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
         >
-            <div className="flex flex-col h-screen bg-gray-900 overflow-hidden">
-                <header className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-xl font-bold text-purple-400">{APP_NAME}</h1>
-                        <span className="text-gray-600">/</span>
-                        <input
-                            type="text"
-                            value={project.name}
-                            onChange={(e) => useAppStore.getState().renameProject(e.target.value)}
-                            placeholder={t('transport.untitled')}
-                            aria-label={t('transport.projectName')}
-                            className="bg-transparent hover:bg-gray-700/60 focus:bg-gray-950 focus:ring-1 focus:ring-purple-500 px-2 py-0.5 rounded text-sm text-gray-200 font-semibold transition-colors border border-transparent hover:border-gray-600 focus:border-purple-500 max-w-[220px] truncate"
-                        />
+            <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
+                {/* Master Studio Console Header */}
+                <header className="bg-slate-900/95 px-4 py-2 border-b border-slate-800/90 flex items-center justify-between shadow-lg z-20 backdrop-blur-md">
+                    <div className="flex items-center gap-3.5">
+                        {/* Brand Badge */}
+                        <div className="flex items-center gap-2.5 select-none">
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 flex items-center justify-center shadow-md shadow-purple-500/20">
+                                <span className="text-white font-black text-xs tracking-tighter">RR</span>
+                            </div>
+                            <div className="hidden sm:block">
+                                <div className="flex items-center gap-1.5 leading-none">
+                                    <h1 className="text-xs font-black tracking-wider text-white">RUNTIME RADIO</h1>
+                                    <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800/60 font-bold">PRO</span>
+                                    {isDirty && (
+                                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400/80" title="Modifiche non salvate" />
+                                    )}
+                                </div>
+                                <span className="text-[9px] text-slate-400 tracking-wider uppercase font-semibold">Studio Console</span>
+                            </div>
+                        </div>
+
+                        <span className="text-slate-700 hidden sm:inline">|</span>
+
+                        {/* Editable Project Name */}
+                        <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1 focus-within:border-purple-500 transition-colors shadow-inner">
+                            <span className="text-xs text-slate-500">📁</span>
+                            <input
+                                type="text"
+                                value={project.name}
+                                onChange={(e) => useAppStore.getState().renameProject(e.target.value)}
+                                placeholder={t('transport.untitled')}
+                                aria-label={t('transport.projectName')}
+                                className="bg-transparent text-xs text-slate-100 font-bold tracking-wide focus:outline-none max-w-[180px] sm:max-w-[220px] truncate"
+                            />
+                        </div>
+
+                        {/* Quick Undo / Redo */}
+                        <div className="flex items-center gap-0.5 border-l border-slate-800 pl-2">
+                            <button
+                                onClick={() => undo()}
+                                disabled={!canUndo()}
+                                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md disabled:opacity-30 transition-colors"
+                                title="Annulla (Ctrl+Z)"
+                            >
+                                <UndoIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={() => redo()}
+                                disabled={!canRedo()}
+                                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md disabled:opacity-30 transition-colors"
+                                title="Ripristina (Ctrl+Y)"
+                            >
+                                <RedoIcon className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Master Transport & Metering */}
                     <TransportControls
                         isPlaying={audioState.isPlaying}
                         onPlayPause={audioActions.playPause}
@@ -336,10 +386,13 @@ const Editor: React.FC<EditorProps> = ({
                         exportFormat={exportFormat}
                         onExportFormatChange={onExportFormatChange}
                         onMeterUpdate={audioActions.onMeterUpdate}
+                        onTimeUpdate={audioActions.onTimeUpdate}
                     />
                 </header>
+
+                {/* Workspace Center (Sidebar + Timeline) */}
                 <div className="flex flex-1 overflow-hidden">
-                    <aside className="w-1/4 max-w-xs flex flex-col bg-gray-800 border-r border-gray-700">
+                    <aside className="w-80 flex flex-col bg-slate-900/90 border-r border-slate-800 shadow-xl z-10 select-none">
                         <FileBin
                             files={project.files}
                             onFileDrop={handleFileDrop}
@@ -349,7 +402,7 @@ const Editor: React.FC<EditorProps> = ({
                         />
                         <PropertiesPanel selectedItem={selectedItem} project={project} />
                     </aside>
-                    <main className="flex-1 flex flex-col overflow-y-auto">
+                    <main className="flex-1 flex flex-col overflow-y-auto bg-slate-950">
                         <Timeline
                             project={project}
                             updateProject={updateProject}
@@ -373,11 +426,34 @@ const Editor: React.FC<EditorProps> = ({
                     </main>
                 </div>
 
+                {/* Studio Footer Status Bar */}
+                <footer className="h-7 bg-slate-950 border-t border-slate-800/90 px-4 flex items-center justify-between text-[11px] text-slate-400 select-none shadow-sm z-20">
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 font-medium">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+                            <span className="text-slate-300 font-mono text-[10px]">ENGINE READY</span>
+                        </div>
+                        <span className="text-slate-700">•</span>
+                        <span className="text-slate-400 font-mono text-[10px]">44.1 kHz • PCM 16-BIT</span>
+                        <span className="text-slate-700 hidden sm:inline">•</span>
+                        <span className="hidden sm:inline">
+                            {project.tracks.length} tracce ({project.tracks.flatMap(t => t.clips).length} clip, {project.files.length} file)
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-3 font-mono text-[10px] text-slate-500">
+                        <span>[SPAZIO] PLAY/PAUSE</span>
+                        <span>[S] SPLIT</span>
+                        <span>[CANC] ELIMINA</span>
+                        <span>[ALT] BYPASS SNAP</span>
+                    </div>
+                </footer>
+
+                {/* Drag Overlay with Pro Card Design */}
                 <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }) }}>
                     {activeDragFile ? (
-                        <div className="bg-gray-700 p-2 rounded-md shadow-lg border border-purple-500 min-w-[200px] pointer-events-none">
-                            <p className="text-sm font-medium text-white truncate">{activeDragFile.name}</p>
-                            <p className="text-xs text-gray-400">{activeDragFile.duration.toFixed(2)}s</p>
+                        <div className="bg-slate-900/95 p-3 rounded-lg shadow-2xl border border-purple-500 min-w-[220px] pointer-events-none backdrop-blur-md">
+                            <p className="text-xs font-bold text-white truncate">{activeDragFile.name}</p>
+                            <p className="text-[10px] font-mono text-purple-300 mt-0.5">{activeDragFile.duration.toFixed(2)}s</p>
                         </div>
                     ) : null}
                 </DragOverlay>

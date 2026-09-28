@@ -43,14 +43,24 @@ const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
     canvas.height = backingHeight;
 
     ctx.clearRect(0, 0, backingWidth, backingHeight);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
 
     const centerY = backingHeight / 2;
 
+    // Subtle zero-crossing center reference line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(backingWidth, centerY);
+    ctx.stroke();
+
+    // High-contrast audio peaks
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+
     for (let x = 0; x < peaks.length; x++) {
-      const amplitude = peaks[x] * centerY;
+      const amplitude = Math.max(1, peaks[x] * (centerY - 3));
       ctx.moveTo(x + 0.5, centerY - amplitude);
       ctx.lineTo(x + 0.5, centerY + amplitude);
     }

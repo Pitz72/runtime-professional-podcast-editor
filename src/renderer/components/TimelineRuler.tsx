@@ -41,21 +41,22 @@ const TimelineRuler: React.FC<TimelineRulerProps> = ({ duration, pixelsPerSecond
 
     return (
         <div
-            className="relative h-6 w-full cursor-pointer hover:bg-gray-800/30 select-none"
+            className="relative h-7 w-full cursor-pointer bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800 select-none hover:bg-slate-800/40 transition-colors"
             style={{ width: `${duration * pixelsPerSecond}px`}}
             onClick={handleClick}
+            title="Clicca per spostare la testina temporale"
         >
             {ticks.map(({ time, isMajor }) => (
                 <div
                     key={time}
-                    className="absolute bottom-0 text-gray-400 pointer-events-none"
+                    className="absolute bottom-0 text-slate-400 pointer-events-none"
                     style={{ left: `${time * pixelsPerSecond}px` }}
                 >
                     <div
-                        className={`absolute bottom-0 w-px ${isMajor ? 'h-4 bg-gray-400' : 'h-2 bg-gray-600'}`}
+                        className={`absolute bottom-0 w-px ${isMajor ? 'h-3.5 bg-slate-400' : 'h-2 bg-slate-700'}`}
                     />
                     {isMajor && (
-                        <span className="absolute -bottom-5 -translate-x-1/2 text-xs">
+                        <span className="absolute -top-6 -translate-x-1/2 text-[10px] font-mono tracking-tight text-slate-400 font-medium">
                             {formatTime(time)}
                         </span>
                     )}
